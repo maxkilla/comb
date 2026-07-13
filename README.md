@@ -78,7 +78,8 @@ node benchmarks/vs-rdxmin.js
 ## Test
 
 ```bash
-npm test
+npm test                       # Claude Code compressor (scripts/compress-tool-output.js)
+python3 test/test_compress.py  # Hermes plugin (.hermes/plugins/comb/__init__.py)
 ```
 
 ## License
