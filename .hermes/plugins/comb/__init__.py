@@ -13,6 +13,9 @@ Excludes read_file / write_file / patch / skill_manage (Hermes' equivalents
 of Read/Edit/Write) — never touches those, same as the Claude Code hook's
 matcher. Everything else (terminal, web_search, web_extract, delegate_task,
 search_files, MCP tools, ...) is compressed when it exceeds the threshold.
+
+Kill switch: COMB_COMPRESS=0 (or false/no/off) disables compression entirely
+without touching config.yaml.
 """
 
 from __future__ import annotations
@@ -20,6 +23,10 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Dict, List, Optional
+
+def _disabled() -> bool:
+    return os.environ.get("COMB_COMPRESS", "").strip().lower() in {"0", "false", "no", "off"}
+
 
 HEAD_CHARS = int(os.environ.get("COMB_COMPRESS_HEAD", "1200"))
 TAIL_CHARS = int(os.environ.get("COMB_COMPRESS_TAIL", "800"))
@@ -71,6 +78,8 @@ def _on_transform_tool_result(
     result: Any = None,
     **_: Any,
 ) -> Optional[str]:
+    if _disabled():
+        return None
     if tool_name in _EXCLUDED_TOOLS:
         return None
     if not isinstance(result, str):

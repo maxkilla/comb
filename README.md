@@ -49,7 +49,13 @@ cp -r .hermes/plugins/comb ~/.hermes/plugins/comb
 mkdir -p ~/.hermes/skills/software-development/comb
 cp skills/comb/SKILL.hermes.md ~/.hermes/skills/software-development/comb/SKILL.md
 ```
-(Project-local install: `./.hermes/plugins/comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`.)
+Then add `comb` to `plugins.enabled` in `~/.hermes/config.yaml`:
+```yaml
+plugins:
+  enabled:
+    - comb
+```
+Plugin's `kind` is omitted in `plugin.yaml` — Hermes defaults that to `standalone`, which is what makes the `enabled` list opt-in required. (Project-local install: `./.hermes/plugins/comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`.)
 
 ## Tool-output compressor tuning (Claude Code + Hermes)
 
@@ -58,6 +64,7 @@ Env vars, both ports:
 COMB_COMPRESS_HEAD       # chars kept from the start (default 1200)
 COMB_COMPRESS_TAIL       # chars kept from the end (default 800)
 COMB_COMPRESS_THRESHOLD  # only compress above this size (default 3000)
+COMB_COMPRESS=0          # kill switch (Hermes only; 0/false/no/off) — disables without touching config.yaml
 ```
 
 ## Benchmark
