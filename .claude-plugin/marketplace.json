@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "comb",
+  "owner": {
+    "name": "maxkilla"
+  },
+  "plugins": [
+    {
+      "name": "comb",
+      "source": "./",
+      "description": "Minimal code AND minimal words, combined — YAGNI persona + terse prose + tool-output compression.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+name: comb
+version: "0.1.0"
+description: "Elides the middle of oversized tool output (terminal, web_search, web_extract, delegate_task, search_files, MCP tools, ...), keeping head, tail, and any error-looking lines. Never touches read_file/write_file/patch/skill_manage. Deterministic, stdlib-only port of comb's Claude Code PostToolUse hook."
+author: "maxkilla"
+hooks:
+  - transform_tool_result

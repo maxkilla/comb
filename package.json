@@ -1,0 +1,12 @@
+{
+  "name": "comb",
+  "version": "0.1.0",
+  "description": "Minimal code AND minimal words, combined. YAGNI/terse-prose persona for Claude Code, Cursor, Windsurf, Cline, Kiro, Copilot, Codex, Gemini CLI — plus a Claude-only deterministic tool-output compressor.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "comb",
+  "displayName": "Comb",
+  "version": "0.1.0",
+  "description": "Minimal code AND minimal words, combined. A YAGNI/terse-prose persona skill plus a deterministic PostToolUse hook that compresses oversized Bash/Agent/WebFetch/WebSearch output.",
+  "author": {
+    "name": "maxkilla"
+  },
+  "homepage": "https://github.com/maxkilla/comb",
+  "repository": "https://github.com/maxkilla/comb",
+  "license": "MIT",
+  "keywords": ["yagni", "minimal", "terse", "token-efficiency", "code-review", "hooks"]
+}

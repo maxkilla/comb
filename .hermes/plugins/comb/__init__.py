@@ -1,0 +1,82 @@
+"""comb tool-output compressor — Hermes ``transform_tool_result`` hook.
+
+Port of comb's Claude Code PostToolUse hook (``scripts/compress-tool-output.js``).
+Elides the middle of oversized tool output, keeping the head, the tail, and
+any line that looks like an error. Deterministic, stdlib-only.
+
+Unlike the Claude Code version, Hermes' ``transform_tool_result`` always
+hands back a plain ``str`` (no per-tool response-shape guessing needed), so
+this port skips the JS version's ``locateText``/``rebuild`` field-sniffing
+entirely and just compresses the string.
+
+Excludes read_file / write_file / patch / skill_manage (Hermes' equivalents
+of Read/Edit/Write) — never touches those, same as the Claude Code hook's
+matcher. Everything else (terminal, web_search, web_extract, delegate_task,
+search_files, MCP tools, ...) is compressed when it exceeds the threshold.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from typing import Any, Dict, List, Optional
+
+HEAD_CHARS = int(os.environ.get("COMB_COMPRESS_HEAD", "1200"))
+TAIL_CHARS = int(os.environ.get("COMB_COMPRESS_TAIL", "800"))
+THRESHOLD = int(os.environ.get("COMB_COMPRESS_THRESHOLD", "3000"))
+MAX_ERROR_LINES = 15
+
+# No \b around "error": word-boundary matching misses "ValueError",
+# "TypeError", "KeyError", etc. Trades a little false-positive risk for not
+# missing real ones.
+_ERROR_PATTERN = re.compile(r"error|exception|traceback|fail(ed|ure)?|fatal|panic", re.IGNORECASE)
+
+_EXCLUDED_TOOLS = {"read_file", "write_file", "patch", "skill_manage"}
+
+
+def _salvage_error_lines(middle: str) -> List[str]:
+    seen = set()
+    kept: List[str] = []
+    for line in middle.split("\n"):
+        if _ERROR_PATTERN.search(line) and line not in seen:
+            seen.add(line)
+            kept.append(line)
+            if len(kept) >= MAX_ERROR_LINES:
+                break
+    return kept
+
+
+def compress(text: str) -> Optional[str]:
+    """Return a compressed version of *text*, or ``None`` if under threshold."""
+    if len(text) <= THRESHOLD:
+        return None
+
+    head = text[:HEAD_CHARS]
+    tail = text[-TAIL_CHARS:] if TAIL_CHARS else ""
+    middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
+    error_lines = _salvage_error_lines(middle)
+
+    marker = f"\n… [comb: elided {len(middle)} chars"
+    if error_lines:
+        marker += f", {len(error_lines)} error line(s) kept below"
+    marker += "] …\n"
+    error_block = ("\n".join(error_lines) + "\n") if error_lines else ""
+
+    return head + marker + error_block + tail
+
+
+def _on_transform_tool_result(
+    tool_name: str = "",
+    args: Optional[Dict[str, Any]] = None,
+    result: Any = None,
+    **_: Any,
+) -> Optional[str]:
+    if tool_name in _EXCLUDED_TOOLS:
+        return None
+    if not isinstance(result, str):
+        return None
+    return compress(result)
+
+
+def register(ctx) -> None:
+    ctx.register_hook("transform_tool_result", _on_transform_tool_result)

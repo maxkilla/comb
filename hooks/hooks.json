@@ -1,0 +1,18 @@
+{
+  "description": "Compresses oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP tool output after it returns, keeping the head, tail, and any error-looking lines. Never touches Read, Edit, or Write.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Agent|WebFetch|WebSearch|Grep|Glob|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/compress-tool-output.js"],
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
