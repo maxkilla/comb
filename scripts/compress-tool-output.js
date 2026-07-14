@@ -147,4 +147,7 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { compress, locateText, salvageErrorLines, middleHasExcessErrors };
+module.exports = {
+  compress, locateText, salvageErrorLines, middleHasExcessErrors,
+  THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS,
+};

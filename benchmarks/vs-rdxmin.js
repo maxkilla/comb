@@ -87,6 +87,7 @@ const stats = {
   comb: { eligible: 0, before: 0, after: 0, salvaged: 0 },
   rdxmin: { eligible: 0, before: 0, after: 0, salvaged: 0 },
 };
+const gate = { fullBypass: 0, bypassChars: 0, ceilingFallback: 0 };
 let scanned = 0;
 
 function walk(d) {
@@ -126,6 +127,20 @@ function scan(f) {
           if (combOut.includes('error line(s) kept below')) stats.comb.salvaged++;
         }
 
+        // TACO-style critical gate stats: only meaningful past THRESHOLD,
+        // where compress() actually reaches the gate check.
+        if (text.length > comb.THRESHOLD) {
+          const middle = text.slice(comb.HEAD_CHARS, text.length - comb.TAIL_CHARS);
+          if (comb.middleHasExcessErrors(middle)) {
+            if (text.length <= comb.GATE_MAX_CHARS) {
+              gate.fullBypass++;
+              gate.bypassChars += text.length;
+            } else {
+              gate.ceilingFallback++;
+            }
+          }
+        }
+
         if (rdxmin) {
           const rdxOut = rdxmin.transform(text, rdxLimits);
           if (rdxOut != null) {
@@ -161,6 +176,11 @@ console.log(`transcript root: ${root}`);
 console.log(`tool_results scanned (allowlisted): ${scanned.toLocaleString('en-US')}\n`);
 
 row('comb', stats.comb);
+console.log(
+  `taco-gate  full-bypass=${gate.fullBypass} (${gate.bypassChars.toLocaleString('en-US')} chars left whole, ` +
+  `<=${comb.GATE_MAX_CHARS.toLocaleString('en-US')}-char ceiling)  ` +
+  `ceiling-fallback=${gate.ceilingFallback} (dense-error output over the ceiling, elided with capped salvage instead)`
+);
 if (rdxmin) {
   row('rdxmin', stats.rdxmin);
   const combSaved = stats.comb.before - stats.comb.after;
