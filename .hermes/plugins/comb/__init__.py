@@ -40,6 +40,45 @@ _ERROR_PATTERN = re.compile(r"error|exception|traceback|fail(ed|ure)?|fatal|pani
 
 _EXCLUDED_TOOLS = {"read_file", "write_file", "patch", "skill_manage"}
 
+def _looks_like_error(text: str) -> bool:
+    # ponytail: cheap C-speed pre-filter (a few substring finds) before the
+    # expensive IGNORECASE regex. Clean output skips the regex entirely (~9us
+    # vs ~350us). Covers every keyword; regex still runs only on a hit.
+    low = text.lower()  # noqa: one lowercase copy, far cheaper than IGNORECASE scan
+    return (
+        "error" in low
+        or "exception" in low
+        or "traceback" in low
+        or "fatal" in low
+        or "panic" in low
+        or "fail" in low
+    )
+
+
+
+def compress(text: str) -> Optional[str]:
+    """Return a compressed version of *text*, or ``None`` if under threshold."""
+    if len(text) <= THRESHOLD:
+        return None
+
+    head = text[:HEAD_CHARS]
+    tail = text[-TAIL_CHARS:] if TAIL_CHARS else ""
+
+    # ponytail: elide middle only when an error-looking line exists; otherwise
+    # tail alone is enough. Cheap pre-filter skips the regex on clean output.
+    error_lines: List[str] = []
+    if _looks_like_error(text):
+        middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
+        error_lines = _salvage_error_lines(middle)
+
+    marker = f"\n… [comb: elided {len(text) - HEAD_CHARS - TAIL_CHARS} chars"
+    if error_lines:
+        marker += f", {len(error_lines)} error line(s) kept below"
+    marker += "] …\n"
+    error_block = ("\n".join(error_lines) + "\n") if error_lines else ""
+
+    return head + marker + error_block + tail
+
 
 def _salvage_error_lines(middle: str) -> List[str]:
     seen = set()
@@ -51,25 +90,6 @@ def _salvage_error_lines(middle: str) -> List[str]:
             if len(kept) >= MAX_ERROR_LINES:
                 break
     return kept
-
-
-def compress(text: str) -> Optional[str]:
-    """Return a compressed version of *text*, or ``None`` if under threshold."""
-    if len(text) <= THRESHOLD:
-        return None
-
-    head = text[:HEAD_CHARS]
-    tail = text[-TAIL_CHARS:] if TAIL_CHARS else ""
-    middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
-    error_lines = _salvage_error_lines(middle)
-
-    marker = f"\n… [comb: elided {len(middle)} chars"
-    if error_lines:
-        marker += f", {len(error_lines)} error line(s) kept below"
-    marker += "] …\n"
-    error_block = ("\n".join(error_lines) + "\n") if error_lines else ""
-
-    return head + marker + error_block + tail
 
 
 def _on_transform_tool_result(
