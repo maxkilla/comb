@@ -31,6 +31,11 @@ def _disabled() -> bool:
 HEAD_CHARS = int(os.environ.get("COMB_COMPRESS_HEAD", "1200"))
 TAIL_CHARS = int(os.environ.get("COMB_COMPRESS_TAIL", "800"))
 THRESHOLD = int(os.environ.get("COMB_COMPRESS_THRESHOLD", "3000"))
+# Ceiling on the critical-gate bypass (see _middle_has_excess_errors below): a
+# dense-error output only skips compression entirely if it's still small.
+# Above this, letting it through whole would defeat the compressor's whole
+# purpose — fall back to elision + capped salvage instead.
+GATE_MAX_CHARS = int(os.environ.get("COMB_COMPRESS_GATE_MAX", "20000"))
 MAX_ERROR_LINES = 15
 
 # No \b around "error": word-boundary matching misses "ValueError",
@@ -56,8 +61,25 @@ def _looks_like_error(text: str) -> bool:
 
 
 
+def _middle_has_excess_errors(middle: str) -> bool:
+    """True if *middle* has more distinct error-looking lines than
+    _salvage_error_lines can keep (MAX_ERROR_LINES) -- i.e. salvage would
+    have to drop some. Early-exits once it's seen enough to know, same
+    trick as _looks_like_error."""
+    seen = set()
+    for line in middle.split("\n"):
+        if not _ERROR_PATTERN.search(line) or line in seen:
+            continue
+        seen.add(line)
+        if len(seen) > MAX_ERROR_LINES:
+            return True
+    return False
+
+
 def compress(text: str) -> Optional[str]:
-    """Return a compressed version of *text*, or ``None`` if under threshold."""
+    """Return a compressed version of *text*, or ``None`` if under threshold
+    or if compression would silently drop error lines it can't fit in the
+    salvage cap (TACO-style critical gate, arXiv:2604.19572)."""
     if len(text) <= THRESHOLD:
         return None
 
@@ -69,6 +91,12 @@ def compress(text: str) -> Optional[str]:
     error_lines: List[str] = []
     if _looks_like_error(text):
         middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
+        # TACO-style critical gate: too many error lines to salvage safely --
+        # leave the whole output untouched, but only below GATE_MAX_CHARS.
+        # Past that, a huge dense-error blob still needs elision, just with
+        # the existing salvage cap.
+        if _middle_has_excess_errors(middle) and len(text) <= GATE_MAX_CHARS:
+            return None
         error_lines = _salvage_error_lines(middle)
 
     marker = f"\n… [comb: elided {len(text) - HEAD_CHARS - TAIL_CHARS} chars"

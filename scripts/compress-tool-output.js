@@ -18,6 +18,11 @@
 const HEAD_CHARS = Number(process.env.COMB_COMPRESS_HEAD) || 1200;
 const TAIL_CHARS = Number(process.env.COMB_COMPRESS_TAIL) || 800;
 const THRESHOLD = Number(process.env.COMB_COMPRESS_THRESHOLD) || 3000;
+// Ceiling on the critical-gate bypass (see middleHasExcessErrors below): a
+// dense-error output only skips compression entirely if it's still small.
+// Above this, letting it through whole would defeat the compressor's whole
+// purpose — fall back to elision + capped salvage instead.
+const GATE_MAX_CHARS = Number(process.env.COMB_COMPRESS_GATE_MAX) || 20000;
 const MAX_ERROR_LINES = 15;
 // No \b around "error": word-boundary matching misses "ValueError",
 // "TypeError", "KeyError", etc. — camelCase error names are exactly what
@@ -69,12 +74,33 @@ function salvageErrorLines(middle) {
   return kept;
 }
 
+// TACO-style critical gate (arXiv:2604.19572): salvageErrorLines caps at
+// MAX_ERROR_LINES, so a middle with more distinct error-looking lines than
+// that would have some silently dropped. Rather than guess which ones
+// matter, treat the whole output as too risky to touch and leave it whole.
+// Early-exits as soon as it's seen one more than the cap — enough to know,
+// without a full scan on relentlessly noisy output.
+function middleHasExcessErrors(middle) {
+  const seen = new Set();
+  for (const line of middle.split('\n')) {
+    if (!ERROR_PATTERN.test(line) || seen.has(line)) continue;
+    seen.add(line);
+    if (seen.size > MAX_ERROR_LINES) return true;
+  }
+  return false;
+}
+
 function compress(text) {
   if (text.length <= THRESHOLD) return null; // not worth touching
 
   const head = text.slice(0, HEAD_CHARS);
   const tail = text.slice(-TAIL_CHARS);
   const middle = text.slice(HEAD_CHARS, text.length - TAIL_CHARS);
+
+  // Full bypass only below GATE_MAX_CHARS — past that, a huge dense-error
+  // blob still needs elision, just with the existing salvage cap.
+  if (middleHasExcessErrors(middle) && text.length <= GATE_MAX_CHARS) return null;
+
   const errorLines = salvageErrorLines(middle);
 
   const marker =
@@ -121,4 +147,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { compress, locateText, salvageErrorLines };
+module.exports = { compress, locateText, salvageErrorLines, middleHasExcessErrors };
