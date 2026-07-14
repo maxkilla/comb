@@ -48,6 +48,33 @@ class CompressTests(unittest.TestCase):
         self.assertIn("Traceback (most recent call last):", result)
         self.assertIn("ValueError: bad input", result)
 
+    def test_leaves_output_whole_when_errors_exceed_salvage_cap(self):
+        head = "A" * 1200
+        noise = "B\n" * 500
+        # 20 distinct error lines, past MAX_ERROR_LINES (15) -- salvage
+        # would drop 5 of them, so the gate should refuse to touch it.
+        many_errors = "\n".join(f"Error: failure case {i}" for i in range(20)) + "\n"
+        tail = "C" * 800
+        original = head + noise + many_errors + noise + tail
+        self.assertIsNone(self.comb.compress(original))
+
+    def test_still_compresses_when_errors_within_salvage_cap(self):
+        head = "A" * 1200
+        noise = "B\n" * 2000
+        few_errors = "Error: one\nError: two\nError: three\n"
+        tail = "C" * 800
+        original = head + noise + few_errors + noise + tail
+        result = self.comb.compress(original)
+        self.assertIsNotNone(result)
+        self.assertIn("Error: one", result)
+        self.assertLess(len(result), len(original))
+
+    def test_middle_has_excess_errors_boundary(self):
+        over = "\n".join(f"error {i}" for i in range(16))
+        at_cap = "\n".join(f"error {i}" for i in range(15))
+        self.assertTrue(self.comb._middle_has_excess_errors(over))
+        self.assertFalse(self.comb._middle_has_excess_errors(at_cap))
+
     def test_excludes_read_write_patch_skill_manage(self):
         big = "X" * 5000
         for tool in ("read_file", "write_file", "patch", "skill_manage"):

@@ -69,12 +69,31 @@ function salvageErrorLines(middle) {
   return kept;
 }
 
+// TACO-style critical gate (arXiv:2604.19572): salvageErrorLines caps at
+// MAX_ERROR_LINES, so a middle with more distinct error-looking lines than
+// that would have some silently dropped. Rather than guess which ones
+// matter, treat the whole output as too risky to touch and leave it whole.
+// Early-exits as soon as it's seen one more than the cap — enough to know,
+// without a full scan on relentlessly noisy output.
+function middleHasExcessErrors(middle) {
+  const seen = new Set();
+  for (const line of middle.split('\n')) {
+    if (!ERROR_PATTERN.test(line) || seen.has(line)) continue;
+    seen.add(line);
+    if (seen.size > MAX_ERROR_LINES) return true;
+  }
+  return false;
+}
+
 function compress(text) {
   if (text.length <= THRESHOLD) return null; // not worth touching
 
   const head = text.slice(0, HEAD_CHARS);
   const tail = text.slice(-TAIL_CHARS);
   const middle = text.slice(HEAD_CHARS, text.length - TAIL_CHARS);
+
+  if (middleHasExcessErrors(middle)) return null; // too many errors to safely salvage — leave it whole
+
   const errorLines = salvageErrorLines(middle);
 
   const marker =
@@ -121,4 +140,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { compress, locateText, salvageErrorLines };
+module.exports = { compress, locateText, salvageErrorLines, middleHasExcessErrors };

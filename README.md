@@ -27,7 +27,7 @@ Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
 | Tests | `test/compress.test.js` |
 
-The persona rules are the same content everywhere. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) only exists where the host has a matching hook point — Claude Code (`PostToolUse`) and Hermes (`transform_tool_result`) today.
+The persona rules are the same content everywhere. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) only exists where the host has a matching hook point — Claude Code (`PostToolUse`) and Hermes (`transform_tool_result`) today. If a middle section has more distinct error-looking lines than the compressor can salvage (15, `MAX_ERROR_LINES`), it leaves the output whole instead of guessing which errors to drop — a critical-gate pattern from [TACO](https://www.alphaxiv.org/abs/2604.19572) (arXiv:2604.19572), adapted here as a static rule rather than their self-evolving one.
 
 ## Install
 
