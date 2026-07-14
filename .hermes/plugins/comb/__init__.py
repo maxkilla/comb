@@ -31,6 +31,11 @@ def _disabled() -> bool:
 HEAD_CHARS = int(os.environ.get("COMB_COMPRESS_HEAD", "1200"))
 TAIL_CHARS = int(os.environ.get("COMB_COMPRESS_TAIL", "800"))
 THRESHOLD = int(os.environ.get("COMB_COMPRESS_THRESHOLD", "3000"))
+# Ceiling on the critical-gate bypass (see _middle_has_excess_errors below): a
+# dense-error output only skips compression entirely if it's still small.
+# Above this, letting it through whole would defeat the compressor's whole
+# purpose — fall back to elision + capped salvage instead.
+GATE_MAX_CHARS = int(os.environ.get("COMB_COMPRESS_GATE_MAX", "20000"))
 MAX_ERROR_LINES = 15
 
 # No \b around "error": word-boundary matching misses "ValueError",
@@ -87,8 +92,10 @@ def compress(text: str) -> Optional[str]:
     if _looks_like_error(text):
         middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
         # TACO-style critical gate: too many error lines to salvage safely --
-        # leave the whole output untouched rather than guess which matter.
-        if _middle_has_excess_errors(middle):
+        # leave the whole output untouched, but only below GATE_MAX_CHARS.
+        # Past that, a huge dense-error blob still needs elision, just with
+        # the existing salvage cap.
+        if _middle_has_excess_errors(middle) and len(text) <= GATE_MAX_CHARS:
             return None
         error_lines = _salvage_error_lines(middle)
 

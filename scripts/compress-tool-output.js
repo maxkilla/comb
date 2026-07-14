@@ -18,6 +18,11 @@
 const HEAD_CHARS = Number(process.env.COMB_COMPRESS_HEAD) || 1200;
 const TAIL_CHARS = Number(process.env.COMB_COMPRESS_TAIL) || 800;
 const THRESHOLD = Number(process.env.COMB_COMPRESS_THRESHOLD) || 3000;
+// Ceiling on the critical-gate bypass (see middleHasExcessErrors below): a
+// dense-error output only skips compression entirely if it's still small.
+// Above this, letting it through whole would defeat the compressor's whole
+// purpose — fall back to elision + capped salvage instead.
+const GATE_MAX_CHARS = Number(process.env.COMB_COMPRESS_GATE_MAX) || 20000;
 const MAX_ERROR_LINES = 15;
 // No \b around "error": word-boundary matching misses "ValueError",
 // "TypeError", "KeyError", etc. — camelCase error names are exactly what
@@ -92,7 +97,9 @@ function compress(text) {
   const tail = text.slice(-TAIL_CHARS);
   const middle = text.slice(HEAD_CHARS, text.length - TAIL_CHARS);
 
-  if (middleHasExcessErrors(middle)) return null; // too many errors to safely salvage — leave it whole
+  // Full bypass only below GATE_MAX_CHARS — past that, a huge dense-error
+  // blob still needs elision, just with the existing salvage cap.
+  if (middleHasExcessErrors(middle) && text.length <= GATE_MAX_CHARS) return null;
 
   const errorLines = salvageErrorLines(middle);
 

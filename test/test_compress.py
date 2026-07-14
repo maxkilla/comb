@@ -58,6 +58,20 @@ class CompressTests(unittest.TestCase):
         original = head + noise + many_errors + noise + tail
         self.assertIsNone(self.comb.compress(original))
 
+    def test_still_elides_dense_error_output_above_gate_ceiling(self):
+        # Same excess-error shape, padded past GATE_MAX_CHARS (20000 default)
+        # -- full bypass here would defeat the compressor's purpose, so it
+        # should fall back to elision with the normal salvage cap instead.
+        head = "A" * 1200
+        big_noise = "B\n" * 15000
+        many_errors = "\n".join(f"Error: failure case {i}" for i in range(20)) + "\n"
+        tail = "C" * 800
+        original = head + big_noise + many_errors + big_noise + tail
+        result = self.comb.compress(original)
+        self.assertIsNotNone(result)
+        self.assertLess(len(result), len(original))
+        self.assertIn("Error: failure case 0", result)
+
     def test_still_compresses_when_errors_within_salvage_cap(self):
         head = "A" * 1200
         noise = "B\n" * 2000

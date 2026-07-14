@@ -47,6 +47,21 @@ test('compress: leaves output whole when error lines exceed the salvage cap', ()
   assert.equal(compress(original), null);
 });
 
+test('compress: still elides a dense-error output above the gate size ceiling', () => {
+  // Same excess-error shape as above, but padded past GATE_MAX_CHARS (20000
+  // default) -- full bypass here would defeat the compressor's purpose, so
+  // it should fall back to elision with the normal salvage cap instead.
+  const head = 'A'.repeat(1200);
+  const bigNoise = 'B\n'.repeat(15000);
+  const manyErrors = Array.from({ length: 20 }, (_, i) => `Error: failure case ${i}`).join('\n') + '\n';
+  const tail = 'C'.repeat(800);
+  const original = head + bigNoise + manyErrors + bigNoise + tail;
+  const result = compress(original);
+  assert.notEqual(result, null);
+  assert.ok(result.length < original.length);
+  assert.ok(result.includes('Error: failure case 0'));
+});
+
 test('compress: still compresses when error lines are within the salvage cap', () => {
   const head = 'A'.repeat(1200);
   const noise = 'B\n'.repeat(2000);
