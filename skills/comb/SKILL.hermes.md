@@ -64,11 +64,11 @@ If brevity would hide a real risk (data loss, security, breaking change), say th
 ## Companion Plugin
 
 The comb repo also ships a Hermes `transform_tool_result` plugin
-(`.hermes/plugins/comb/`) that compresses oversized terminal/web_search/
+(`comb/`) that compresses oversized terminal/web_search/
 web_extract/delegate_task/MCP tool output. It runs independently of this
 skill — on whenever the plugin is installed, regardless of whether comb mode
-is active. Install: copy `.hermes/plugins/comb/` to `~/.hermes/plugins/comb/`
-(or `./.hermes/plugins/comb/` in a project, with `HERMES_ENABLE_PROJECT_PLUGINS=1`).
+is active. Install: copy `comb/` to `~/comb/`
+(or `./comb/` in a project, with `HERMES_ENABLE_PROJECT_PLUGINS=1`).
 
 ## Common Pitfalls
 

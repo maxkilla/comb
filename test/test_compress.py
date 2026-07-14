@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the Hermes comb plugin (.hermes/plugins/comb/__init__.py).
+"""Tests for the Hermes comb plugin (plugin.yaml + __init__.py at repo root).
 
 Mirrors test/compress.test.js. Stdlib-only — run with:
     python3 test/test_compress.py
@@ -7,11 +7,10 @@ Mirrors test/compress.test.js. Stdlib-only — run with:
 
 import importlib.util
 import os
-import sys
 import unittest
 from pathlib import Path
 
-_PLUGIN_PATH = Path(__file__).resolve().parent.parent / ".hermes" / "plugins" / "comb" / "__init__.py"
+_PLUGIN_PATH = Path(__file__).resolve().parent.parent / "__init__.py"
 
 
 def _load_plugin():

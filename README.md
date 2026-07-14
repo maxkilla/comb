@@ -19,7 +19,7 @@ Supports Claude Code and Hermes — the two agents this was built for, both of w
 | Claude Code plugin manifest | `.claude-plugin/` |
 | Claude Code compression hook | `hooks/hooks.json` + `scripts/compress-tool-output.js` |
 | Hermes skill | `skills/comb/SKILL.hermes.md` |
-| Hermes compression plugin | `.hermes/plugins/comb/` |
+| Hermes compression plugin | `plugin.yaml` + `__init__.py` (repo root) |
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
 | Tests | `test/compress.test.js`, `test/test_compress.py` |
 
@@ -37,17 +37,16 @@ claude plugin install comb@comb
 
 **Hermes:**
 ```bash
-cp -r .hermes/plugins/comb ~/.hermes/plugins/comb
-mkdir -p ~/.hermes/skills/software-development/comb
-cp skills/comb/SKILL.hermes.md ~/.hermes/skills/software-development/comb/SKILL.md
+hermes plugins install maxkilla/comb --enable
 ```
-Then add `comb` to `plugins.enabled` in `~/.hermes/config.yaml`:
+(Or manual: `cp plugin.yaml __init__.py ~/.hermes/plugins/comb/` then add `comb` to `plugins.enabled`.)
+The persona skill is separate — copy `skills/comb/SKILL.hermes.md` to `~/.hermes/skills/software-development/comb/SKILL.md` if you want comb mode.
 ```yaml
 plugins:
   enabled:
     - comb
 ```
-Plugin's `kind` is omitted in `plugin.yaml` — Hermes defaults that to `standalone`, which is what makes the `enabled` list opt-in required. (Project-local install: `./.hermes/plugins/comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`.)
+Plugin's `kind` is omitted in `plugin.yaml` — Hermes defaults that to `standalone`, which is what makes the `enabled` list opt-in required. (Project-local install: `./comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`.)
 
 ## Tool-output compressor tuning (Claude Code + Hermes)
 
@@ -72,7 +71,7 @@ node benchmarks/vs-rdxmin.js
 
 ```bash
 npm test                       # Claude Code compressor (scripts/compress-tool-output.js)
-python3 test/test_compress.py  # Hermes plugin (.hermes/plugins/comb/__init__.py)
+python3 test/test_compress.py  # Hermes plugin (comb/__init__.py)
 ```
 
 ## License
