@@ -1,6 +1,0 @@
-{
-  "name": "comb",
-  "version": "0.1.0",
-  "description": "Minimal code AND minimal words, combined. YAGNI-first code + terse prose for Gemini CLI.",
-  "contextFileName": "GEMINI.md"
-}

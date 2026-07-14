@@ -9,6 +9,8 @@ Trigger words: "comb", "comb mode", "be lazy", "keep it short", "yagni", "minima
 
 Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 
+Supports Claude Code and Hermes — the two agents this was built for, both of which support the full feature set (persona skill + tool-output compression hook).
+
 ## What's in this repo
 
 | Piece | Where |
@@ -16,18 +18,14 @@ Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 | Claude Code skill (source of truth) | `skills/comb/SKILL.md` |
 | Claude Code plugin manifest | `.claude-plugin/` |
 | Claude Code compression hook | `hooks/hooks.json` + `scripts/compress-tool-output.js` |
-| Cursor | `.cursor/rules/comb.mdc` |
-| Windsurf | `.windsurf/rules/comb.md` |
-| Cline | `.clinerules/comb.md` |
-| Kiro | `.kiro/steering/comb.md` |
-| GitHub Copilot | `.github/copilot-instructions.md` |
-| Codex / Amp (agent-agnostic) | `AGENTS.md`, `.codex-plugin/plugin.json` |
-| Gemini CLI | `GEMINI.md`, `gemini-extension.json` |
-| Hermes | `skills/comb/SKILL.hermes.md` (skill), `.hermes/plugins/comb/` (compression hook) |
+| Hermes skill | `skills/comb/SKILL.hermes.md` |
+| Hermes compression plugin | `.hermes/plugins/comb/` |
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
-| Tests | `test/compress.test.js` |
+| Tests | `test/compress.test.js`, `test/test_compress.py` |
 
-The persona rules are the same content everywhere. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) only exists where the host has a matching hook point — Claude Code (`PostToolUse`) and Hermes (`transform_tool_result`) today. If a middle section has more distinct error-looking lines than the compressor can salvage (15, `MAX_ERROR_LINES`), it leaves the output whole instead of guessing which errors to drop — a critical-gate pattern from [TACO](https://www.alphaxiv.org/abs/2604.19572) (arXiv:2604.19572), adapted here as a static rule rather than their self-evolving one.
+The persona rules are the same content in both. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) is ported to both hosts' equivalent hook point — Claude Code's `PostToolUse` and Hermes' `transform_tool_result`.
+
+If a middle section has more distinct error-looking lines than the compressor can salvage (`MAX_ERROR_LINES`, 15), it leaves the output whole instead of guessing which errors to drop — a critical-gate pattern from [TACO](https://www.alphaxiv.org/abs/2604.19572) (arXiv:2604.19572), adapted here as a static rule rather than their self-evolving one. That full bypass only applies below `GATE_MAX_CHARS` (20000 chars) — above it, a dense-error output still needs elision, so it falls back to the normal salvage cap instead of passing an arbitrarily large blob through untouched.
 
 ## Install
 
@@ -36,12 +34,6 @@ The persona rules are the same content everywhere. The tool-output compressor (e
 claude plugin marketplace add maxkilla/comb
 claude plugin install comb@comb
 ```
-
-**Cursor / Windsurf / Cline / Kiro / Copilot:** clone this repo's rule file into your project (or copy it in) — e.g. `.cursor/rules/comb.mdc` into your project's `.cursor/rules/`.
-
-**Codex / Amp:** drop `AGENTS.md` into your project root, or merge its contents into an existing one.
-
-**Gemini CLI:** `gemini extensions install` supports installing from a git repo — see `gemini extensions install --help` for the exact syntax your version expects. Manual fallback: copy `GEMINI.md` into your project root.
 
 **Hermes:**
 ```bash
@@ -64,6 +56,7 @@ Env vars, both ports:
 COMB_COMPRESS_HEAD       # chars kept from the start (default 1200)
 COMB_COMPRESS_TAIL       # chars kept from the end (default 800)
 COMB_COMPRESS_THRESHOLD  # only compress above this size (default 3000)
+COMB_COMPRESS_GATE_MAX   # size ceiling for the error-count full-bypass gate (default 20000)
 COMB_COMPRESS=0          # kill switch (Hermes only; 0/false/no/off) — disables without touching config.yaml
 ```
 
