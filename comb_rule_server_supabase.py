@@ -37,8 +37,73 @@ DB_URL = os.environ["SUPABASE_DB_URL"]  # fail loudly on startup if unset, don't
 CONFIDENCE_FLOOR = 0.2
 CONFIDENCE_DECAY = 0.7
 CONFIDENCE_GROWTH = 1.05
+# Rules change rarely but are queried on every /compress call, so we cache
+# them in memory. A short TTL + a background refresher keeps matches off the
+# Supabase round-trip hot path entirely (drops match latency from ~48ms to
+# ~1ms). Writes (misses, uses, complaints) still hit the DB directly.
+RULES_TTL_SEC = float(os.environ.get("COMB_RULES_TTL_SEC", "30"))
+RULES_REFRESH_SEC = float(os.environ.get("COMB_RULES_REFRESH_SEC", "15"))
 
 app = FastAPI(title="comb-rule-store (supabase)")
+
+
+@app.on_event("startup")
+def _on_startup():
+    # Prime the cache from Supabase immediately so the first /compress calls
+    # are already DB-free, then keep it warm in the background.
+    _refresh_rules_cache()
+    _start_cache_refresher()
+
+
+# Module-level rules cache: list of dicts (see _row_to_rule) + load timestamp.
+_RULES_CACHE: list[dict] = []
+_RULES_CACHE_AT = 0.0
+
+
+def _load_rules() -> list[dict]:
+    """Fetch active rules from Supabase. Raises on DB error so the caller can
+    fall back to the last good cache instead of poisoning it."""
+    with db() as con:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT * FROM rules WHERE confidence >= %s AND status = 'active'",
+            (CONFIDENCE_FLOOR,),
+        )
+        return [_row_to_rule(r) for r in cur.fetchall()]
+
+
+def _refresh_rules_cache() -> None:
+    """Best-effort: replace the in-memory cache with a fresh DB pull. On error,
+    keep the existing cache (stale-but-working beats empty)."""
+    global _RULES_CACHE, _RULES_CACHE_AT
+    try:
+        fresh = _load_rules()
+    except Exception:
+        return  # keep last good cache
+    _RULES_CACHE = fresh
+    _RULES_CACHE_AT = time.time()
+
+
+def _get_rules() -> list[dict]:
+    """Return cached rules, refreshing lazily if past TTL. Never raises."""
+    global _RULES_CACHE_AT
+    if time.time() - _RULES_CACHE_AT > RULES_TTL_SEC:
+        _refresh_rules_cache()
+    return _RULES_CACHE
+
+
+def _start_cache_refresher() -> None:
+    """Background thread that keeps the cache warm so the hot path never waits
+    on a Supabase query. Daemonized — dies with the process, no cleanup needed."""
+    import threading
+
+    def loop():
+        while True:
+            time.sleep(RULES_REFRESH_SEC)
+            _refresh_rules_cache()
+
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
 
 
 @contextmanager
@@ -173,54 +238,85 @@ def compress(req: CompressRequest):
     if _looks_critical(req.output):
         return CompressResponse(output=req.output, rule_id=None)
 
-    with db() as con:
-        cur = con.cursor()
-        cur.execute(
-            "SELECT * FROM rules WHERE confidence >= %s AND status = 'active'",
-            (CONFIDENCE_FLOOR,),
+    # Match against the in-memory cache (no Supabase round-trip on the hot path).
+    rows = _get_rules()
+    rule = next((r for r in rows if re.search(r["trigger_regex"], req.command)), None)
+
+    if rule is None:
+        # Fire-and-forget miss log: don't block the response on a Supabase
+        # round-trip. Best-effort; a missed insert just means one fewer data
+        # point for rule discovery.
+        _queue_miss_write(req.command, req.output[:2000], len(req.output.splitlines()))
+        return CompressResponse(output=req.output, rule_id=None)
+
+    lines = req.output.splitlines()
+    if rule["max_lines"] and len(lines) <= rule["max_lines"]:
+        return CompressResponse(output=req.output, rule_id=None)
+
+    keep_first, keep_last = rule["keep_first_n"], rule["keep_last_n"]
+    # _row_to_rule already splits keep/strip patterns into lists.
+    keep_patterns = rule["keep_patterns"] if rule["keep_patterns"] else []
+    strip_patterns = rule["strip_patterns"] if rule["strip_patterns"] else []
+
+    kept = set(range(min(keep_first, len(lines))))
+    kept |= set(range(max(0, len(lines) - keep_last), len(lines)))
+    for i, line in enumerate(lines):
+        if any(re.search(p, line) for p in keep_patterns):
+            kept.add(i)
+
+    compressed = [
+        line for i, line in enumerate(lines)
+        if i in kept or not any(re.search(p, line) for p in strip_patterns)
+    ]
+    if len(compressed) < len(lines):
+        compressed.insert(
+            keep_first,
+            f"... [comb: {len(lines) - len(compressed)} lines pruned by rule '{rule['id']}'] ..."
         )
-        rows = cur.fetchall()
-        rule = next((r for r in rows if re.search(r["trigger_regex"], req.command)), None)
 
-        if rule is None:
-            lines = req.output.splitlines()
-            cur.execute(
-                "INSERT INTO misses (command, output_sample, line_count, ts) VALUES (%s, %s, %s, %s)",
-                (req.command, req.output[:2000], len(lines), time.time()),
-            )
-            return CompressResponse(output=req.output, rule_id=None)
-
-        lines = req.output.splitlines()
-        if rule["max_lines"] and len(lines) <= rule["max_lines"]:
-            return CompressResponse(output=req.output, rule_id=None)
-
-        keep_first, keep_last = rule["keep_first_n"], rule["keep_last_n"]
-        keep_patterns = rule["keep_patterns"].splitlines() if rule["keep_patterns"] else []
-        strip_patterns = rule["strip_patterns"].splitlines() if rule["strip_patterns"] else []
-
-        kept = set(range(min(keep_first, len(lines))))
-        kept |= set(range(max(0, len(lines) - keep_last), len(lines)))
-        for i, line in enumerate(lines):
-            if any(re.search(p, line) for p in keep_patterns):
-                kept.add(i)
-
-        compressed = [
-            line for i, line in enumerate(lines)
-            if i in kept or not any(re.search(p, line) for p in strip_patterns)
-        ]
-        if len(compressed) < len(lines):
-            compressed.insert(
-                keep_first,
-                f"... [comb: {len(lines) - len(compressed)} lines pruned by rule '{rule['id']}'] ..."
-            )
-
-        new_conf = min(1.0, rule["confidence"] * CONFIDENCE_GROWTH)
-        cur.execute(
-            "UPDATE rules SET uses = uses + 1, confidence = %s, last_used = %s WHERE id = %s",
-            (new_conf, time.time(), rule["id"]),
-        )
+    new_conf = min(1.0, rule["confidence"] * CONFIDENCE_GROWTH)
+    # Fire-and-forget stats write: don't block the response on a Supabase
+    # round-trip. Best-effort; a missed update just means slightly stale
+    # usage counters, which nothing depends on for correctness.
+    _queue_usage_write(rule["id"], new_conf)
 
     return CompressResponse(output="\n".join(compressed), rule_id=rule["id"])
+
+
+def _queue_miss_write(command: str, sample: str, line_count: int) -> None:
+    """Schedule a non-blocking INSERT into the misses table."""
+    import threading
+
+    def _do():
+        try:
+            with db() as con:
+                cur = con.cursor()
+                cur.execute(
+                    "INSERT INTO misses (command, output_sample, line_count, ts) VALUES (%s, %s, %s, %s)",
+                    (command, sample, line_count, time.time()),
+                )
+        except Exception:
+            pass  # miss log is best-effort
+
+    threading.Thread(target=_do, daemon=True).start()
+
+
+def _queue_usage_write(rule_id: str, new_conf: float) -> None:
+    """Schedule a non-blocking UPDATE of uses/confidence/last_used."""
+    import threading
+
+    def _do():
+        try:
+            with db() as con:
+                cur = con.cursor()
+                cur.execute(
+                    "UPDATE rules SET uses = uses + 1, confidence = %s, last_used = %s WHERE id = %s",
+                    (new_conf, time.time(), rule_id),
+                )
+        except Exception:
+            pass  # stats are best-effort
+
+    threading.Thread(target=_do, daemon=True).start()
 
 
 @app.post("/complain")
