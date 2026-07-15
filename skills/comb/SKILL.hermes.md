@@ -64,11 +64,20 @@ If brevity would hide a real risk (data loss, security, breaking change), say th
 ## Companion Plugin
 
 The comb repo also ships a Hermes `transform_tool_result` plugin
-(`comb/`) that compresses oversized terminal/web_search/
+(`__init__.py` at repo root) that compresses oversized terminal/web_search/
 web_extract/delegate_task/MCP tool output. It runs independently of this
 skill — on whenever the plugin is installed, regardless of whether comb mode
-is active. Install: copy `comb/` to `~/comb/`
-(or `./comb/` in a project, with `HERMES_ENABLE_PROJECT_PLUGINS=1`).
+is active. Install: copy `__init__.py` + `plugin.yaml` to
+`~/.hermes/plugins/comb/` and add `comb` to `plugins.enabled` in
+`config.yaml`.
+
+**Optional rule-store.** Set `COMB_RULE_STORE_URL` (e.g. in `/etc/comb/cron_env`)
+to offload compression to an external rule-store server (see the README's
+"Rule-store (Supabase)" section) before falling back to generic elision. When
+unset, comb is zero-dependency and zero-network. The plugin sources
+`/etc/comb/env` and `/etc/comb/cron_env` at import time, so secrets
+(`SUPABASE_DB_URL`) and settings (`COMB_RULE_STORE_URL`) are picked up
+automatically on the box where the rule-store server runs.
 
 ## Common Pitfalls
 

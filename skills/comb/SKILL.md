@@ -44,3 +44,5 @@ If brevity would hide a real risk (data loss, security, breaking change), say th
 ## Companion hook
 
 This plugin also ships a `PostToolUse` hook (`hooks/hooks.json` → `scripts/compress-tool-output.js`) that compresses oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output. It runs independently of this skill — on by default whenever the plugin is enabled, regardless of whether comb mode is active. See the README for how it works and its limitations.
+
+**Optional rule-store.** Set `COMB_RULE_STORE_URL` to offload compression to an external rule-store server (see the README's "Rule-store (Supabase)" section) before falling back to generic elision. When unset, comb is zero-dependency and zero-network — the rule-store path is fully skipped.
