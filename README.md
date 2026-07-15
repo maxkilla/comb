@@ -112,10 +112,15 @@ the hot path. The cache is primed at startup and refreshed by a background threa
 the per-call Supabase round-trip off `/compress`: measured rule-match latency through the live
 comb hook dropped from ~48 ms/call (1 query per call) to **~6–9 ms/call** — a ~5–8× speedup — with
 compression ratio unchanged. Stats writes (`uses`/`confidence` on a match, `misses` on a no-match)
-are fire-and-forget background threads so they never block the response. Rule edits/adds propagate
-within the refresh window; a failed refresh keeps the last good cache (stale-but-working beats
-empty). Tradeoff: lower `COMB_RULES_REFRESH_SEC` for faster rule pickup at the cost of more Supabase
-reads.
+are fire-and-forget background threads so they never block the response.
+
+Cache coherence: a rule added or approved via the control plane (`/rules`, `/rules/{id}/approve`)
+takes effect on the **very next** `/compress` call — a cache miss triggers one fresh DB pull, so
+there's no stale window for the write paths. The background refresher is the steady-state
+warm-up, not the only propagation mechanism. A failed refresh keeps the last good cache
+(stale-but-working beats empty). Tune `COMB_RULES_REFRESH_SEC` only if you want a tighter bound on
+how quickly *deleted* (vs added/approved) rules stop matching — deletions still wait for the next
+refresh.
 
 **Misses** (unmatched commands) are logged to the `misses` table — a feed for discovering new
 rules. Endpoints: `/compress`, `/rules`, `/rules/{id}/approve`, `/rules/candidates`, `/misses`,

@@ -92,6 +92,26 @@ def _get_rules() -> list[dict]:
     return _RULES_CACHE
 
 
+def _match_rule(command: str) -> dict | None:
+    """Find the first cached active rule whose trigger_regex matches command.
+
+    Cache-aware: on a miss against the current cache, pull a fresh copy from
+    Supabase and retry once. This means a rule added/approved via the control
+    plane takes effect on the very next /compress call instead of waiting up
+    to RULES_REFRESH_SEC for the background refresher — closing the
+    read-after-write staleness gap. The fresh pull only happens on a miss, so
+    the steady-state hot path (a rule already matches) stays DB-free.
+    """
+    rows = _RULES_CACHE
+    rule = next((r for r in rows if re.search(r["trigger_regex"], command)), None)
+    if rule is None and _RULES_CACHE_AT != 0.0:
+        # Cache hit returned nothing — try a fresh pull before giving up.
+        _refresh_rules_cache()
+        rows = _RULES_CACHE
+        rule = next((r for r in rows if re.search(r["trigger_regex"], command)), None)
+    return rule
+
+
 def _start_cache_refresher() -> None:
     """Background thread that keeps the cache warm so the hot path never waits
     on a Supabase query. Daemonized — dies with the process, no cleanup needed."""
@@ -238,9 +258,11 @@ def compress(req: CompressRequest):
     if _looks_critical(req.output):
         return CompressResponse(output=req.output, rule_id=None)
 
-    # Match against the in-memory cache (no Supabase round-trip on the hot path).
-    rows = _get_rules()
-    rule = next((r for r in rows if re.search(r["trigger_regex"], req.command)), None)
+    # Match against the in-memory cache (no Supabase round-trip on the hot
+    # path). A miss triggers one fresh DB pull so rules added/approved via the
+    # control plane take effect immediately rather than after the refresh
+    # interval (see _match_rule).
+    rule = _match_rule(req.command)
 
     if rule is None:
         # Fire-and-forget miss log: don't block the response on a Supabase
