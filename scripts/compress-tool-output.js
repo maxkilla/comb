@@ -31,6 +31,11 @@ const MAX_ERROR_LINES = 15;
 const ERROR_PATTERN = /error|exception|traceback|fail(ed|ure)?|fatal|panic/i;
 const FIELD_CANDIDATES = ['output', 'stdout', 'content', 'text', 'result'];
 
+// Optional rule-store lookup, tried before the generic elision below. Unset
+// COMB_RULE_STORE_URL and this whole path is skipped — comb stays
+// zero-dependency and zero-network by default, this is opt-in.
+const RULE_STORE_TIMEOUT_MS = Number(process.env.COMB_RULE_STORE_TIMEOUT_MS) || 500;
+
 function readStdin() {
   return new Promise((resolve, reject) => {
     let data = '';
@@ -112,6 +117,39 @@ function compress(text) {
   return head + marker + errorBlock + tail;
 }
 
+// Best-effort command string for rule-store matching. Same fail-safe
+// philosophy as locateText: guess common shapes, never throw, fall back to
+// tool_name so non-Bash tools still get a (likely no-match) lookup rather
+// than crashing the hook.
+function extractCommand(toolName, toolInput) {
+  if (!toolInput || typeof toolInput !== 'object') return toolName || '';
+  return toolInput.command || toolInput.pattern || toolInput.url || toolName || '';
+}
+
+// Tries the shared rule-store server first. Fail-open on anything —
+// unset URL, network error, timeout, non-200, or "no rule matched" — by
+// returning null, which sends the caller straight to the existing generic
+// elision below. This must never be slower than RULE_STORE_TIMEOUT_MS or
+// block the hook; PostToolUse hooks run in the hot path.
+async function tryRuleStore(command, text) {
+  const ruleStoreUrl = process.env.COMB_RULE_STORE_URL || null;
+  if (!ruleStoreUrl) return null;
+  try {
+    const res = await fetch(`${ruleStoreUrl}/compress`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, output: text }),
+      signal: AbortSignal.timeout(RULE_STORE_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (typeof data.output !== 'string' || data.output === text) return null;
+    return data.output;
+  } catch {
+    return null; // server down/slow/unreachable — never block on this
+  }
+}
+
 async function main() {
   const raw = await readStdin();
 
@@ -130,8 +168,10 @@ async function main() {
   const located = locateText(input.tool_response);
   if (!located) process.exit(0); // unrecognized shape — no-op, never guess
 
-  const compressed = compress(located.text);
-  if (compressed === null) process.exit(0); // under threshold — no-op
+  const command = extractCommand(input.tool_name, input.tool_input);
+  const ruleStoreResult = await tryRuleStore(command, located.text);
+  const compressed = ruleStoreResult !== null ? ruleStoreResult : compress(located.text);
+  if (compressed === null) process.exit(0); // under threshold, no rule matched — no-op
 
   process.stdout.write(
     JSON.stringify({
@@ -148,6 +188,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  compress, locateText, salvageErrorLines, middleHasExcessErrors,
+  compress, locateText, salvageErrorLines, middleHasExcessErrors, extractCommand, tryRuleStore,
   THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS,
 };
