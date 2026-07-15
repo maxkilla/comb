@@ -65,6 +65,13 @@ COMB_RULE_STORE_URL      # opt-in: http[s]://host:port of the rule-store server;
 COMB_RULE_STORE_TIMEOUT_MS  # rule-store request timeout (default 500; never blocks the hook)
 ```
 
+Rule-store server env vars (set where `comb_rule_server_supabase.py` runs):
+```
+SUPABASE_DB_URL         # required: postgres connection string (role bypasses RLS; only the server holds this)
+COMB_RULES_TTL_SEC      # rules cache TTL before a lazy refresh (default 30)
+COMB_RULES_REFRESH_SEC  # background refresher interval (default 15; rule changes propagate within this window)
+```
+
 ## Rule-store (Supabase) — optional
 
 Both compressor ports can POST `{command, output}` to `${COMB_RULE_STORE_URL}/compress` and
@@ -98,6 +105,17 @@ falls back to generic elision).
 **Wire into comb:** set `COMB_RULE_STORE_URL=http://127.0.0.1:8420` in the compressor's
 environment (e.g. `/etc/comb/cron_env`). The Hermes plugin sources `/etc/comb/env` (secrets like
 `SUPABASE_DB_URL`) and `/etc/comb/cron_env` (settings like `COMB_RULE_STORE_URL`) at import time.
+
+**In-memory rules cache.** The server matches against a rules cache, not a live Supabase query, on
+the hot path. The cache is primed at startup and refreshed by a background thread every
+`COMB_RULES_REFRESH_SEC` (default 15s; lazy TTL fallback `COMB_RULES_TTL_SEC` = 30s). This takes
+the per-call Supabase round-trip off `/compress`: measured rule-match latency through the live
+comb hook dropped from ~48 ms/call (1 query per call) to **~6–9 ms/call** — a ~5–8× speedup — with
+compression ratio unchanged. Stats writes (`uses`/`confidence` on a match, `misses` on a no-match)
+are fire-and-forget background threads so they never block the response. Rule edits/adds propagate
+within the refresh window; a failed refresh keeps the last good cache (stale-but-working beats
+empty). Tradeoff: lower `COMB_RULES_REFRESH_SEC` for faster rule pickup at the cost of more Supabase
+reads.
 
 **Misses** (unmatched commands) are logged to the `misses` table — a feed for discovering new
 rules. Endpoints: `/compress`, `/rules`, `/rules/{id}/approve`, `/rules/candidates`, `/misses`,
