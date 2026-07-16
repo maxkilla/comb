@@ -15,9 +15,26 @@
 // with COMB_COMPRESS_DEBUG=1 to see the real shape for your version and
 // adjust FIELD_CANDIDATES below if needed.
 
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
 const HEAD_CHARS = Number(process.env.COMB_COMPRESS_HEAD) || 1200;
 const TAIL_CHARS = Number(process.env.COMB_COMPRESS_TAIL) || 800;
 const THRESHOLD = Number(process.env.COMB_COMPRESS_THRESHOLD) || 3000;
+// Mirrors OpenDev's truncation.rs (crates/opendev-tools-impl): elision is
+// otherwise irreversible — once the middle is gone, it's gone. Opt-out
+// (not opt-in) because losing data silently is worse than a stray file on
+// disk; set COMB_COMPRESS_SAVE_FULL=0 to disable.
+const SAVE_FULL = process.env.COMB_COMPRESS_SAVE_FULL !== '0';
+const OVERFLOW_DIR = path.join(os.homedir(), '.claude', 'comb', 'tool-output');
+// Same cap as OpenDev: never let one huge tool call write unbounded bytes
+// to disk. Past this, keep head 75% + tail 25% of the *original* text in
+// the saved file too (same shape as the in-context elision, just a much
+// bigger window).
+const MAX_OVERFLOW_BYTES = 1024 * 1024;
+const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // Ceiling on the critical-gate bypass (see middleHasExcessErrors below): a
 // dense-error output only skips compression entirely if it's still small.
 // Above this, letting it through whole would defeat the compressor's whole
@@ -95,6 +112,64 @@ function middleHasExcessErrors(middle) {
   return false;
 }
 
+// Saves the full, untouched text to a uniquely-named file in OVERFLOW_DIR.
+// Never throws — on any filesystem error, returns null and the caller just
+// omits the recovery hint (elision still happens; it's the file that's
+// best-effort, not the compression). If text exceeds MAX_OVERFLOW_BYTES,
+// the saved file is itself capped head75/tail25 rather than truncated flat,
+// so both "how it started" and "how it ended" survive even in the worst case.
+function saveOverflow(text) {
+  try {
+    fs.mkdirSync(OVERFLOW_DIR, { recursive: true });
+    const filename = `tool_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+    const filepath = path.join(OVERFLOW_DIR, filename);
+
+    let toWrite = text;
+    if (Buffer.byteLength(text, 'utf8') > MAX_OVERFLOW_BYTES) {
+      const headSize = Math.floor((MAX_OVERFLOW_BYTES * 3) / 4);
+      const tailSize = MAX_OVERFLOW_BYTES - headSize;
+      const head = text.slice(0, headSize);
+      const tail = text.slice(-tailSize);
+      const omitted = text.length - headSize - tailSize;
+      toWrite = `${head}\n\n[... ${omitted} chars omitted from overflow file ...]\n\n${tail}`;
+    }
+
+    fs.writeFileSync(filepath, toWrite, { mode: 0o600 });
+    return filepath;
+  } catch {
+    return null; // best-effort — never block the hook on a disk write
+  }
+}
+
+// Removes overflow files older than RETENTION_MS. Not called automatically
+// by this hook (PostToolUse runs on the hot path — a directory scan every
+// tool call is wasted work); wire this into a SessionStart hook or a cron
+// if unbounded disk growth in OVERFLOW_DIR becomes a problem.
+function cleanupOldFiles() {
+  let entries;
+  try {
+    entries = fs.readdirSync(OVERFLOW_DIR, { withFileTypes: true });
+  } catch {
+    return 0; // directory doesn't exist yet — nothing to clean
+  }
+  const cutoff = Date.now() - RETENTION_MS;
+  let cleaned = 0;
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.startsWith('tool_')) continue;
+    const filepath = path.join(OVERFLOW_DIR, entry.name);
+    try {
+      const { mtimeMs } = fs.statSync(filepath);
+      if (mtimeMs < cutoff) {
+        fs.unlinkSync(filepath);
+        cleaned += 1;
+      }
+    } catch {
+      // file vanished or unreadable between readdir and stat — skip it
+    }
+  }
+  return cleaned;
+}
+
 function compress(text) {
   if (text.length <= THRESHOLD) return null; // not worth touching
 
@@ -107,10 +182,12 @@ function compress(text) {
   if (middleHasExcessErrors(middle) && text.length <= GATE_MAX_CHARS) return null;
 
   const errorLines = salvageErrorLines(middle);
+  const savedPath = SAVE_FULL ? saveOverflow(text) : null;
 
   const marker =
     `\n… [comb: elided ${middle.length} chars` +
     (errorLines.length ? `, ${errorLines.length} error line(s) kept below` : '') +
+    (savedPath ? `, full output: ${savedPath}` : '') +
     `] …\n`;
   const errorBlock = errorLines.length ? errorLines.join('\n') + '\n' : '';
 
@@ -189,5 +266,6 @@ if (require.main === module) {
 
 module.exports = {
   compress, locateText, salvageErrorLines, middleHasExcessErrors, extractCommand, tryRuleStore,
-  THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS,
+  saveOverflow, cleanupOldFiles,
+  THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS, SAVE_FULL, OVERFLOW_DIR, MAX_OVERFLOW_BYTES, RETENTION_MS,
 };
