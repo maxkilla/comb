@@ -72,6 +72,37 @@ RULES = [
 con = psycopg2.connect(DSN, connect_timeout=10)
 con.autocommit = True
 cur = con.cursor()
+
+# Bootstrap schema if missing (idempotent). Mirrors schema_supabase.sql so a
+# cold Supabase project works with just `python3 seed_rules_supabase.py`.
+cur.execute(
+    """CREATE TABLE IF NOT EXISTS rules (
+           id             TEXT    PRIMARY KEY,
+           trigger_regex  TEXT    NOT NULL,
+           keep_patterns  TEXT    NOT NULL DEFAULT '',
+           strip_patterns TEXT    NOT NULL DEFAULT '',
+           keep_first_n   INTEGER NOT NULL DEFAULT 5,
+           keep_last_n    INTEGER NOT NULL DEFAULT 20,
+           max_lines      INTEGER,
+           confidence     REAL    NOT NULL DEFAULT 1.0,
+           uses           INTEGER NOT NULL DEFAULT 0,
+           complaints     INTEGER NOT NULL DEFAULT 0,
+           last_used      DOUBLE PRECISION NOT NULL DEFAULT 0,
+           status         TEXT    NOT NULL DEFAULT 'active',
+           created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+       )"""
+)
+cur.execute(
+    """CREATE TABLE IF NOT EXISTS misses (
+           id            BIGSERIAL PRIMARY KEY,
+           command       TEXT    NOT NULL,
+           output_sample TEXT    NOT NULL,
+           line_count    INTEGER NOT NULL,
+           ts            DOUBLE PRECISION NOT NULL,
+           created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+       )"""
+)
+
 for rid, trig, keep, strip, kf, kl, ml, status in RULES:
     cur.execute(
         """INSERT INTO rules

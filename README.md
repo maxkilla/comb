@@ -22,6 +22,7 @@ Supports Claude Code and Hermes — the two agents this was built for, both of w
 | Hermes compression plugin | `plugin.yaml` + `__init__.py` (repo root) |
 | Rule-store backend (Supabase) | `comb_rule_server_supabase.py` |
 | Rule-store seed script | `seed_rules_supabase.py` |
+| Rule-store schema (DDL) | `schema_supabase.sql` |
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
 | Tests | `test/compress.test.js`, `test/test_compress.py` |
 
@@ -90,7 +91,14 @@ pip install fastapi uvicorn psycopg2-binary --break-system-packages
 uvicorn comb_rule_server_supabase:app --host 127.0.0.1 --port 8420
 ```
 
-**Seed the rules** (idempotent — safe to re-run):
+**Bootstrap the schema** (only needed on a cold Supabase project — the seed
+script also creates the tables if missing, so this is optional):
+```bash
+export SUPABASE_DB_URL="postgresql://postgres.<ref>:***@aws-0-<region>.pooler.supabase.com:6543/postgres"
+psql "$SUPABASE_DB_URL" -f schema_supabase.sql
+```
+
+**Seed the rules** (idempotent — safe to re-run; creates `rules`/`misses` if absent):
 ```bash
 export SUPABASE_DB_URL="postgresql://postgres.<ref>:***@aws-0-<region>.pooler.supabase.com:6543/postgres"
 python3 seed_rules_supabase.py
