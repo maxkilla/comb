@@ -74,6 +74,10 @@ MAX_ERROR_LINES = 15
 # zero-dependency and zero-network by default, this is opt-in. Mirrors the
 # Claude Code hook's rule-store integration (scripts/compress-tool-output.js).
 RULE_STORE_TIMEOUT_MS = int(os.environ.get("COMB_RULE_STORE_TIMEOUT_MS", "500"))
+# Matches COMB_RULE_STORE_TOKEN on the server (comb_rule_server_supabase.py)
+# -- only needed if the server isn't localhost-only. Sent as a Bearer token
+# when set; omitted entirely when unset.
+RULE_STORE_TOKEN = os.environ.get("COMB_RULE_STORE_TOKEN")
 
 # No \b around "error": word-boundary matching misses "ValueError",
 # "TypeError", "KeyError", etc. Trades a little false-positive risk for not
@@ -170,10 +174,13 @@ def _try_rule_store(command: str, text: str) -> Optional[str]:
     if not rule_store_url:
         return None
     try:
+        headers = {"Content-Type": "application/json"}
+        if RULE_STORE_TOKEN:
+            headers["Authorization"] = f"Bearer {RULE_STORE_TOKEN}"
         req = urllib.request.Request(
             f"{rule_store_url.rstrip('/')}/compress",
             data=json.dumps({"command": command, "output": text}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=RULE_STORE_TIMEOUT_MS / 1000.0) as resp:

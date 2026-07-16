@@ -64,13 +64,24 @@ COMB_COMPRESS_GATE_MAX   # size ceiling for the error-count full-bypass gate (de
 COMB_COMPRESS=0          # kill switch (Hermes only; 0/false/no/off) — disables without touching config.yaml
 COMB_RULE_STORE_URL      # opt-in: http[s]://host:port of the rule-store server; unset = skip rule-store
 COMB_RULE_STORE_TIMEOUT_MS  # rule-store request timeout (default 500; never blocks the hook)
+COMB_RULE_STORE_TOKEN    # sent as `Authorization: Bearer <token>`; only needed if the server requires it
+COMB_COMPRESS_SAVE_FULL=0  # Claude Code only: disable saving the full untouched output to disk on elision
 ```
+
+**Elided output recovery (Claude Code only).** Elision is otherwise irreversible, so by default
+(`COMB_COMPRESS_SAVE_FULL` unset or `1`) the full original text is saved to
+`~/.claude/comb/tool-output/` (mode `0600`, capped at 1MB per file, head75/tail25 if larger) and
+the elided marker includes the recovery path. Files older than 7 days are swept opportunistically
+(2% chance per save, no dedicated hot-path scan) rather than requiring a cron job. Since this
+persists full tool output — including anything sensitive that appeared in it — to disk, set
+`COMB_COMPRESS_SAVE_FULL=0` if you'd rather lose the recovery file than keep it around.
 
 Rule-store server env vars (set where `comb_rule_server_supabase.py` runs):
 ```
 SUPABASE_DB_URL         # required: postgres connection string (role bypasses RLS; only the server holds this)
 COMB_RULES_TTL_SEC      # rules cache TTL before a lazy refresh (default 30)
 COMB_RULES_REFRESH_SEC  # background refresher interval (default 15; rule changes propagate within this window)
+COMB_RULE_STORE_TOKEN    # if set, every endpoint except /health requires a matching `Authorization: Bearer` header
 ```
 
 ## Rule-store (Supabase) — optional
@@ -83,6 +94,14 @@ slow or break the hot path.
 The production backend (`comb_rule_server_supabase.py`, FastAPI + psycopg2) stores rules and
 misses in Supabase Postgres. It connects as the `postgres` role (bypasses RLS; only this server
 holds `SUPABASE_DB_URL`). Critical-looking output is passed through untouched.
+
+**Security:** every endpoint except `/health` reads or writes rules (`/rules`, `/rules/{id}/approve`,
+`/complain`) or logged command output (`/misses`) — a stored `trigger_regex` also runs against
+real command text on every `/compress` call, so unauthenticated write access is a regex-DoS
+vector, not just a data leak. Default deployment is localhost-only and unauthenticated (fine —
+only the local compressor hooks can reach it). If you need the server reachable from elsewhere,
+set `COMB_RULE_STORE_TOKEN` on the server **and** on every client (`COMB_RULE_STORE_TOKEN` env var
+for both compressor ports) — every endpoint but `/health` then requires a matching bearer token.
 
 **Run the server:**
 ```bash
