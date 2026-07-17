@@ -16,6 +16,12 @@
 
 'use strict';
 
+// This benchmark calls comb.compress() directly against real transcript
+// text — with SAVE_FULL defaulting on, that would write a real scratch file
+// to disk (~/.claude/comb/tool-output/) per eligible tool_result, per run.
+// Must be set before requiring the module (SAVE_FULL is read at require-time).
+process.env.COMB_COMPRESS_SAVE_FULL = '0';
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
