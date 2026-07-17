@@ -141,3 +141,23 @@ test('cleanupOldFiles: returns 0 when OVERFLOW_DIR does not exist yet, never thr
   fs.rmSync(OVERFLOW_DIR, { recursive: true, force: true });
   assert.equal(cleanupOldFiles(), 0);
 });
+
+test('saveOverflow: opportunistically runs cleanup so OVERFLOW_DIR is actually bounded', () => {
+  fs.mkdirSync(OVERFLOW_DIR, { recursive: true });
+  const old = path.join(OVERFLOW_DIR, 'tool_old_test');
+  fs.writeFileSync(old, 'data');
+  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+  fs.utimesSync(old, eightDaysAgo, eightDaysAgo);
+
+  const originalRandom = Math.random;
+  Math.random = () => 0; // force the cleanup roll to hit
+  try {
+    const p = saveOverflow('trigger cleanup\n'.repeat(200));
+    assert.ok(p);
+    fs.rmSync(p, { force: true });
+  } finally {
+    Math.random = originalRandom;
+  }
+
+  assert.ok(!fs.existsSync(old), 'stale file should have been swept by the opportunistic cleanup');
+});

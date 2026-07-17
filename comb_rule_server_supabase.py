@@ -16,13 +16,24 @@ Supabase's REST API or client SDKs — not for this server, which is the only
 thing that ever touches the DB directly). Nothing outside this server should
 hold SUPABASE_DB_URL.
 
-Run:
-    uvicorn comb_rule_server_supabase:app --host 0.0.0.0 --port 8420
+Run (binds localhost-only by default -- this box is the only intended
+caller; every endpoint below reads or writes rules and logged command
+output, so don't expose it wider without also setting COMB_RULE_STORE_TOKEN):
+    uvicorn comb_rule_server_supabase:app --host 127.0.0.1 --port 8420
+
+If you do need it reachable from elsewhere (shared box, container network),
+set COMB_RULE_STORE_TOKEN to a random secret on both this server and every
+client (COMB_RULE_STORE_TOKEN in the comb hook's env) -- every endpoint
+except /health then requires `Authorization: Bearer <token>`. Unset token +
+non-localhost bind = anyone who can reach the port can read logged command
+output (/misses), insert rules with attacker-controlled regex (/rules), and
+promote/degrade them (/rules/{id}/approve, /complain).
 
 Deps: fastapi, uvicorn, psycopg2-binary
     pip install fastapi uvicorn psycopg2-binary --break-system-packages
 """
 
+import hmac
 import os
 import re
 import time
@@ -30,7 +41,7 @@ from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 DB_URL = os.environ["SUPABASE_DB_URL"]  # fail loudly on startup if unset, don't silently fall back
@@ -43,6 +54,18 @@ CONFIDENCE_GROWTH = 1.05
 # ~1ms). Writes (misses, uses, complaints) still hit the DB directly.
 RULES_TTL_SEC = float(os.environ.get("COMB_RULES_TTL_SEC", "30"))
 RULES_REFRESH_SEC = float(os.environ.get("COMB_RULES_REFRESH_SEC", "15"))
+# Optional shared-secret auth -- unset means unauthenticated (fine for the
+# documented localhost-only default; required if you widen the bind).
+RULE_STORE_TOKEN = os.environ.get("COMB_RULE_STORE_TOKEN")
+
+
+def require_token(authorization: str = Header(default="")) -> None:
+    if not RULE_STORE_TOKEN:
+        return  # auth not configured -- localhost-only deployment, allow
+    presented = authorization.removeprefix("Bearer ").strip()
+    if not hmac.compare_digest(presented, RULE_STORE_TOKEN):
+        raise HTTPException(401, "missing or invalid bearer token")
+
 
 app = FastAPI(title="comb-rule-store (supabase)")
 
@@ -193,7 +216,7 @@ def _looks_critical(output: str) -> bool:
 
 # --- endpoints ---
 
-@app.post("/rules")
+@app.post("/rules", dependencies=[Depends(require_token)])
 def register_rule(rule: RuleIn):
     with db() as con:
         cur = con.cursor()
@@ -212,7 +235,7 @@ def register_rule(rule: RuleIn):
     return {"status": "created"}
 
 
-@app.post("/rules/{rule_id}/approve")
+@app.post("/rules/{rule_id}/approve", dependencies=[Depends(require_token)])
 def approve_candidate(rule_id: str):
     with db() as con:
         cur = con.cursor()
@@ -223,7 +246,7 @@ def approve_candidate(rule_id: str):
     return {"status": "approved"}
 
 
-@app.get("/rules/candidates")
+@app.get("/rules/candidates", dependencies=[Depends(require_token)])
 def list_candidates():
     with db() as con:
         cur = con.cursor()
@@ -232,7 +255,7 @@ def list_candidates():
     return [_row_to_rule(r) for r in rows]
 
 
-@app.get("/rules")
+@app.get("/rules", dependencies=[Depends(require_token)])
 def list_rules():
     with db() as con:
         cur = con.cursor()
@@ -241,7 +264,7 @@ def list_rules():
     return [_row_to_rule(r) for r in rows]
 
 
-@app.get("/misses")
+@app.get("/misses", dependencies=[Depends(require_token)])
 def list_misses(since: float = 0.0, limit: int = 500):
     with db() as con:
         cur = con.cursor()
@@ -253,7 +276,7 @@ def list_misses(since: float = 0.0, limit: int = 500):
     return [dict(r) for r in rows]
 
 
-@app.post("/compress", response_model=CompressResponse)
+@app.post("/compress", response_model=CompressResponse, dependencies=[Depends(require_token)])
 def compress(req: CompressRequest):
     if _looks_critical(req.output):
         return CompressResponse(output=req.output, rule_id=None)
@@ -341,7 +364,7 @@ def _queue_usage_write(rule_id: str, new_conf: float) -> None:
     threading.Thread(target=_do, daemon=True).start()
 
 
-@app.post("/complain")
+@app.post("/complain", dependencies=[Depends(require_token)])
 def complain(req: ComplainRequest):
     with db() as con:
         cur = con.cursor()

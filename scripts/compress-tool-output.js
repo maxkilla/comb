@@ -52,6 +52,11 @@ const FIELD_CANDIDATES = ['output', 'stdout', 'content', 'text', 'result'];
 // COMB_RULE_STORE_URL and this whole path is skipped — comb stays
 // zero-dependency and zero-network by default, this is opt-in.
 const RULE_STORE_TIMEOUT_MS = Number(process.env.COMB_RULE_STORE_TIMEOUT_MS) || 500;
+// Matches COMB_RULE_STORE_TOKEN on the server (comb_rule_server_supabase.py)
+// -- only needed if the server isn't localhost-only. Sent as a Bearer token
+// when set; omitted entirely when unset (server treats that as localhost-only,
+// unauthenticated).
+const RULE_STORE_TOKEN = process.env.COMB_RULE_STORE_TOKEN || null;
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -112,6 +117,12 @@ function middleHasExcessErrors(middle) {
   return false;
 }
 
+// Chance of running cleanupOldFiles() on any given saveOverflow() call —
+// keeps RETENTION_MS actually enforced without a directory scan on every
+// hot-path call (see cleanupOldFiles below; it was previously defined but
+// never invoked anywhere, so OVERFLOW_DIR grew unbounded by default).
+const CLEANUP_PROBABILITY = 0.02;
+
 // Saves the full, untouched text to a uniquely-named file in OVERFLOW_DIR.
 // Never throws — on any filesystem error, returns null and the caller just
 // omits the recovery hint (elision still happens; it's the file that's
@@ -120,7 +131,7 @@ function middleHasExcessErrors(middle) {
 // so both "how it started" and "how it ended" survive even in the worst case.
 function saveOverflow(text) {
   try {
-    fs.mkdirSync(OVERFLOW_DIR, { recursive: true });
+    fs.mkdirSync(OVERFLOW_DIR, { recursive: true, mode: 0o700 });
     const filename = `tool_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const filepath = path.join(OVERFLOW_DIR, filename);
 
@@ -135,16 +146,17 @@ function saveOverflow(text) {
     }
 
     fs.writeFileSync(filepath, toWrite, { mode: 0o600 });
+    if (Math.random() < CLEANUP_PROBABILITY) cleanupOldFiles();
     return filepath;
   } catch {
     return null; // best-effort — never block the hook on a disk write
   }
 }
 
-// Removes overflow files older than RETENTION_MS. Not called automatically
-// by this hook (PostToolUse runs on the hot path — a directory scan every
-// tool call is wasted work); wire this into a SessionStart hook or a cron
-// if unbounded disk growth in OVERFLOW_DIR becomes a problem.
+// Removes overflow files older than RETENTION_MS. Invoked opportunistically
+// (CLEANUP_PROBABILITY) from saveOverflow rather than on every hot-path
+// call, and exported for anyone who'd rather wire it into a SessionStart
+// hook or cron instead.
 function cleanupOldFiles() {
   let entries;
   try {
@@ -214,7 +226,10 @@ async function tryRuleStore(command, text) {
   try {
     const res = await fetch(`${ruleStoreUrl}/compress`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(RULE_STORE_TOKEN ? { Authorization: `Bearer ${RULE_STORE_TOKEN}` } : {}),
+      },
       body: JSON.stringify({ command, output: text }),
       signal: AbortSignal.timeout(RULE_STORE_TIMEOUT_MS),
     });
