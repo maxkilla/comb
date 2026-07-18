@@ -112,14 +112,10 @@ Both replay your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) 
 node benchmarks/vs-rdxmin.js
 ```
 
-**Speed** (`benchmarks/speed.js`) — wall-clock µs per tool_result, regenerates the chart below:
+**Speed** (`benchmarks/speed.js`) — wall-clock µs per tool_result:
 ```bash
 node benchmarks/speed.js
 ```
-
-![comb vs rdxmin latency](benchmarks/results/speed.svg)
-
-Full numbers + methodology/caveats: [`benchmarks/results/speed.md`](benchmarks/results/speed.md).
 
 ## Test
 
