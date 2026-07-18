@@ -92,21 +92,11 @@ persists full tool output — including anything sensitive that appeared in it �
 
 ## Benchmark
 
-Both replay your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) through both comb's and rdxmin's actual compression code — deterministic, zero LLM calls, zero network.
+`benchmarks/vs-rdxmin.js` replays your real Claude Code transcripts through both comb's and rdxmin's compression code — deterministic, zero LLM calls:
 
-**Savings** (`benchmarks/vs-rdxmin.js`) — chars before/after elision:
 ```bash
 node benchmarks/vs-rdxmin.js
 ```
-
-**Speed** (`benchmarks/speed.js`) — wall-clock µs per tool_result, regenerates the chart below:
-```bash
-node benchmarks/speed.js
-```
-
-![comb vs rdxmin latency](benchmarks/results/speed.svg)
-
-Full numbers + methodology/caveats: [`benchmarks/results/speed.md`](benchmarks/results/speed.md).
 
 ## Test
 
