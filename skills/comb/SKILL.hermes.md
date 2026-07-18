@@ -71,13 +71,7 @@ is active. Install: copy `__init__.py` + `plugin.yaml` to
 `~/.hermes/plugins/comb/` and add `comb` to `plugins.enabled` in
 `config.yaml`.
 
-**Optional rule-store.** Set `COMB_RULE_STORE_URL` (e.g. in `/etc/comb/cron_env`)
-to offload compression to an external rule-store server (see the README's
-"Rule-store (Supabase)" section) before falling back to generic elision. When
-unset, comb is zero-dependency and zero-network. The plugin sources
-`/etc/comb/env` and `/etc/comb/cron_env` at import time, so secrets
-(`SUPABASE_DB_URL`) and settings (`COMB_RULE_STORE_URL`) are picked up
-automatically on the box where the rule-store server runs.
+Deterministic, stdlib-only, zero-network.
 
 ## Common Pitfalls
 

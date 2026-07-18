@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { compress, locateText, salvageErrorLines, middleHasExcessErrors, extractCommand, tryRuleStore } = require('../scripts/compress-tool-output.js');
+const { compress, locateText, salvageErrorLines, middleHasExcessErrors } = require('../scripts/compress-tool-output.js');
 
 test('compress: leaves short text untouched', () => {
   assert.equal(compress('short output'), null);
@@ -99,91 +99,3 @@ test('locateText: returns null for unrecognized shapes (fail safe, never guesses
   assert.equal(locateText(null), null);
 });
 
-test('extractCommand: prefers tool_input.command (Bash shape)', () => {
-  assert.equal(extractCommand('Bash', { command: 'pytest tests/', description: 'run tests' }), 'pytest tests/');
-});
-
-test('extractCommand: falls back to pattern, then url, then tool_name', () => {
-  assert.equal(extractCommand('Grep', { pattern: 'TODO' }), 'TODO');
-  assert.equal(extractCommand('WebFetch', { url: 'https://example.com' }), 'https://example.com');
-  assert.equal(extractCommand('mcp__airtable__search', {}), 'mcp__airtable__search');
-});
-
-test('extractCommand: never throws on missing/malformed tool_input', () => {
-  assert.equal(extractCommand('Bash', null), 'Bash');
-  assert.equal(extractCommand('Bash', undefined), 'Bash');
-  assert.equal(extractCommand(undefined, undefined), '');
-});
-
-test('tryRuleStore: returns null when COMB_RULE_STORE_URL is unset (default, zero-network)', async () => {
-  delete process.env.COMB_RULE_STORE_URL;
-  const result = await tryRuleStore('pytest tests/', 'some output');
-  assert.equal(result, null);
-});
-
-test('tryRuleStore: returns the server\'s compressed output on a match', async (t) => {
-  process.env.COMB_RULE_STORE_URL = 'http://fake-rule-store:8420';
-  const originalFetch = global.fetch;
-  t.after(() => {
-    global.fetch = originalFetch;
-    delete process.env.COMB_RULE_STORE_URL;
-  });
-
-  global.fetch = async (url, opts) => {
-    assert.equal(url, 'http://fake-rule-store:8420/compress');
-    const body = JSON.parse(opts.body);
-    assert.equal(body.command, 'pytest tests/');
-    return {
-      ok: true,
-      json: async () => ({ output: 'compressed by rule store', rule_id: 'pytest_verbose' }),
-    };
-  };
-
-  const result = await tryRuleStore('pytest tests/', 'raw pytest output');
-  assert.equal(result, 'compressed by rule store');
-});
-
-test('tryRuleStore: fails open (returns null) on network error, never throws', async (t) => {
-  process.env.COMB_RULE_STORE_URL = 'http://fake-rule-store:8420';
-  const originalFetch = global.fetch;
-  t.after(() => {
-    global.fetch = originalFetch;
-    delete process.env.COMB_RULE_STORE_URL;
-  });
-
-  global.fetch = async () => { throw new Error('ECONNREFUSED'); };
-
-  const result = await tryRuleStore('pytest tests/', 'raw output');
-  assert.equal(result, null);
-});
-
-test('tryRuleStore: fails open on non-200 response', async (t) => {
-  process.env.COMB_RULE_STORE_URL = 'http://fake-rule-store:8420';
-  const originalFetch = global.fetch;
-  t.after(() => {
-    global.fetch = originalFetch;
-    delete process.env.COMB_RULE_STORE_URL;
-  });
-
-  global.fetch = async () => ({ ok: false });
-
-  const result = await tryRuleStore('pytest tests/', 'raw output');
-  assert.equal(result, null);
-});
-
-test('tryRuleStore: fails open when server reports no rule matched (output unchanged)', async (t) => {
-  process.env.COMB_RULE_STORE_URL = 'http://fake-rule-store:8420';
-  const originalFetch = global.fetch;
-  t.after(() => {
-    global.fetch = originalFetch;
-    delete process.env.COMB_RULE_STORE_URL;
-  });
-
-  global.fetch = async () => ({
-    ok: true,
-    json: async () => ({ output: 'raw output', rule_id: null }), // unchanged text = no compression happened
-  });
-
-  const result = await tryRuleStore('docker build .', 'raw output');
-  assert.equal(result, null);
-});
