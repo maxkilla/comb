@@ -37,6 +37,18 @@ Comb doesn't wait for the model to notice a trigger word or choose to load a ski
 
 Either way, `skills/comb/SKILL.md` / `SKILL.hermes.md` stay as the source of truth and remain independently loadable.
 
+## Statusline (Claude Code)
+
+`scripts/comb-statusline.sh` renders a `[COMB]` badge showing rate-limit usage (5h/weekly bars, same data `/usage` shows) and cumulative compressor savings (`⇣NNk tok (Nx)`, read from `~/.claude/comb/stats.json`, written by `compress-tool-output.js` on every elision). Bash-only, no jq/node dependency, symlink-refused reads.
+
+Claude Code allows exactly one `statusLine` command — wire it in `~/.claude/settings.json`:
+```json
+"statusLine": {
+  "type": "command",
+  "command": "bash \"/absolute/path/to/comb/scripts/comb-statusline.sh\""
+}
+```
+
 ## Install
 
 **Claude Code (plugin):**

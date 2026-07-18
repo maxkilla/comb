@@ -47,6 +47,7 @@ const MAX_ERROR_LINES = 15;
 // substring inside "terrorism") for not missing real ones.
 const ERROR_PATTERN = /error|exception|traceback|fail(ed|ure)?|fatal|panic/i;
 const FIELD_CANDIDATES = ['output', 'stdout', 'content', 'text', 'result'];
+const STATS_FILE = path.join(os.homedir(), '.claude', 'comb', 'stats.json');
 
 function readStdin() {
   return new Promise((resolve, reject) => {
@@ -193,7 +194,30 @@ function compress(text) {
     `] …\n`;
   const errorBlock = errorLines.length ? errorLines.join('\n') + '\n' : '';
 
-  return head + marker + errorBlock + tail;
+  const result = head + marker + errorBlock + tail;
+  recordSavings(text.length - result.length);
+  return result;
+}
+
+// Cumulative savings ledger for the statusline (scripts/comb-statusline.sh).
+// Best-effort, never throws, never blocks the hook — a lost stats update
+// just means an undercounted badge, not a broken compression. Refuses
+// symlinks (attacker-controlled path swap) and caps writes at mode 0600.
+function recordSavings(saved) {
+  try {
+    try { if (fs.lstatSync(STATS_FILE).isSymbolicLink()) return; } catch (e) { if (e.code !== 'ENOENT') return; }
+    let stats = { savedChars: 0, events: 0 };
+    try {
+      const parsed = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+      if (parsed && Number.isFinite(parsed.savedChars) && Number.isFinite(parsed.events)) stats = parsed;
+    } catch { /* missing/corrupt — start fresh */ }
+    stats.savedChars += saved;
+    stats.events += 1;
+    fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true, mode: 0o700 });
+    const tmp = `${STATS_FILE}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(stats), { mode: 0o600 });
+    fs.renameSync(tmp, STATS_FILE);
+  } catch { /* best-effort — stats are not load-bearing */ }
 }
 
 async function main() {
@@ -233,6 +257,6 @@ if (require.main === module) {
 
 module.exports = {
   compress, locateText, salvageErrorLines, middleHasExcessErrors,
-  saveOverflow, cleanupOldFiles,
-  THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS, SAVE_FULL, OVERFLOW_DIR, MAX_OVERFLOW_BYTES, RETENTION_MS,
+  saveOverflow, cleanupOldFiles, recordSavings,
+  THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS, SAVE_FULL, OVERFLOW_DIR, MAX_OVERFLOW_BYTES, RETENTION_MS, STATS_FILE,
 };
