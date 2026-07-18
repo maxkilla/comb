@@ -5,7 +5,7 @@ Minimal code AND minimal words, combined. Two blades: what you build, how you ta
 - **Blade 1 — code:** an efficiency ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum code). Stop at the first rung that holds.
 - **Blade 2 — prose:** facts and code, no preamble, no restating the ask, no trailing summary. Fragments over sentences where meaning survives.
 
-Trigger words: "comb", "comb mode", "be lazy", "keep it short", "yagni", "minimal", "no fluff", or complaining about over-engineering/bloat/long-winded answers. Off: "stop comb" / "normal mode". One blade only: "comb code" or "comb prose".
+Default-on, no trigger word needed — see "Always-on persona" below. Off: "stop comb" / "normal mode". One blade only: "comb code" or "comb prose".
 
 Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 
@@ -18,6 +18,7 @@ Supports Claude Code and Hermes — the two agents this was built for, both of w
 | Claude Code skill (source of truth) | `skills/comb/SKILL.md` |
 | Claude Code plugin manifest | `.claude-plugin/` |
 | Claude Code compression hook | `hooks/hooks.json` + `scripts/compress-tool-output.js` |
+| Claude Code always-on persona hook | `hooks/hooks.json` + `scripts/inject-comb-mode.js` |
 | Hermes skill | `skills/comb/SKILL.hermes.md` |
 | Hermes compression plugin | `plugin.yaml` + `__init__.py` (repo root) |
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
@@ -26,6 +27,15 @@ Supports Claude Code and Hermes — the two agents this was built for, both of w
 The persona rules are the same content in both. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) is ported to both hosts' equivalent hook point — Claude Code's `PostToolUse` and Hermes' `transform_tool_result`. Deterministic, zero-dependency, zero-network — no external service required.
 
 If a middle section has more distinct error-looking lines than the compressor can salvage (`MAX_ERROR_LINES`, 15), it leaves the output whole instead of guessing which errors to drop — a critical-gate pattern from [TACO](https://www.alphaxiv.org/abs/2604.19572) (arXiv:2604.19572), adapted here as a static rule rather than their self-evolving one. That full bypass only applies below `GATE_MAX_CHARS` (20000 chars) — above it, a dense-error output still needs elision, so it falls back to the normal salvage cap instead of passing an arbitrarily large blob through untouched.
+
+## Always-on persona
+
+Comb doesn't wait for the model to notice a trigger word or choose to load a skill:
+
+- **Claude Code:** the plugin's `UserPromptSubmit` hook (`scripts/inject-comb-mode.js`) injects the persona rules as `additionalContext` on every turn.
+- **Hermes:** installed by appending the same rules to `~/.hermes/SOUL.md`, the agent's identity slot — loaded unconditionally every session, no skill load required. (This edits a file outside the repo; if you don't want that, delete the appended block from `SOUL.md` and rely on `skills/comb/SKILL.hermes.md` instead, trigger-word activated.)
+
+Either way, `skills/comb/SKILL.md` / `SKILL.hermes.md` stay as the source of truth and remain independently loadable.
 
 ## Install
 

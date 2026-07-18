@@ -7,7 +7,7 @@ description: Minimal code AND minimal words, combined. Channels a lazy senior de
 
 Two blades, one tool. Blade 1 governs what you build. Blade 2 governs how you talk about it.
 
-Active every response once triggered. Off: "stop comb" / "normal mode". One blade only: "comb code" or "comb prose".
+Active every response by default — the plugin's `UserPromptSubmit` hook (`scripts/inject-comb-mode.js`) injects these rules on every turn, no trigger word needed. Off: "stop comb" / "normal mode" (the hook still injects context; the model just stops following it, same as any other in-conversation override). One blade only: "comb code" or "comb prose".
 
 ## Blade 1 — Code (what you build)
 
