@@ -14,13 +14,30 @@ scope() {   # $1 = window key, $2 = inner field → digits only, or empty
   printf '%s' "$INPUT" | grep -oE "\"$1\":\{[^}]*\}" \
     | grep -oE "\"$2\":[0-9.]+" | grep -oE '[0-9.]+' | head -1
 }
-bar() {     # $1 = integer pct → 10-char █/░ loading bar
-  local p=$1 filled empty f e out=""
-  filled=$(( p / 10 )); [ "$filled" -gt 10 ] && filled=10; [ "$filled" -lt 0 ] && filled=0
-  empty=$(( 10 - filled ))
-  [ "$filled" -gt 0 ] && { printf -v f "%${filled}s"; out="${f// /█}"; }
-  [ "$empty"  -gt 0 ] && { printf -v e "%${empty}s";  out="${out}${e// /░}"; }
-  printf '%s' "$out"
+# Eighth-block glyphs for sub-cell fill precision (index 1-7; 0 unused, 8 is a
+# full █ cell). Gives an 8-cell bar 64 distinct fill levels instead of 10.
+EIGHTHS=(' ' '▏' '▎' '▍' '▌' '▋' '▊' '▉')
+BAR_WIDTH=8
+
+color_for_pct() {  # $1 = integer pct → 256-color ANSI code, traffic-light gradient
+  local p=$1
+  if   [ "$p" -ge 80 ]; then printf '196'  # red — near/at limit
+  elif [ "$p" -ge 50 ]; then printf '178'  # yellow — over half
+  else printf '76'; fi                     # green — plenty of headroom
+}
+bar() {     # $1 = integer pct → BAR_WIDTH-cell colored bar, smooth eighth-block fill
+  local p=$1
+  local eighths=$(( p * BAR_WIDTH * 8 / 100 )) full rem out="" i color
+  [ "$eighths" -gt $(( BAR_WIDTH * 8 )) ] && eighths=$(( BAR_WIDTH * 8 ))
+  [ "$eighths" -lt 0 ] && eighths=0
+  full=$(( eighths / 8 )); rem=$(( eighths % 8 ))
+  color=$(color_for_pct "$p")
+  for (( i = 0; i < full; i++ )); do out="${out}█"; done
+  [ "$rem" -gt 0 ] && out="${out}${EIGHTHS[$rem]}"
+  local empty=$(( BAR_WIDTH - full - (rem > 0 ? 1 : 0) ))
+  local pad=""
+  for (( i = 0; i < empty; i++ )); do pad="${pad}░"; done
+  printf '\033[38;5;%sm%s\033[0m\033[38;5;238m%s\033[0m' "$color" "$out" "$pad"
 }
 until_str() {  # $1 = reset epoch → "3d4h"/"2h14m"/"12m", empty if past/absent
   [ -z "$1" ] && return
@@ -42,7 +59,7 @@ seg() {     # $1 = label, $2 = window key → " Label: <bar> NN% ⟳<until>"  (e
 S=$(seg Session five_hour)
 W=$(seg Weekly seven_day)
 LIMITS="$S"
-[ -n "$W" ] && LIMITS="${LIMITS}${LIMITS:+ |}$W"
+[ -n "$W" ] && LIMITS="${LIMITS}${LIMITS:+ │}$W"
 
 # API-key users get no rate_limits in stdin — fall back to session cost.
 # Plan users pay no per-token cost, so show it only when no limits rendered.
