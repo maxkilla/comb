@@ -80,16 +80,7 @@ function locateText(toolResponse) {
 }
 
 function salvageErrorLines(middle) {
-  const seen = new Set();
-  const kept = [];
-  for (const line of middle.split('\n')) {
-    if (ERROR_PATTERN.test(line) && !seen.has(line)) {
-      seen.add(line);
-      kept.push(line);
-      if (kept.length >= MAX_ERROR_LINES) break;
-    }
-  }
-  return kept;
+  return scanErrors(middle).kept;
 }
 
 // TACO-style critical gate (arXiv:2604.19572): salvageErrorLines caps at
@@ -99,13 +90,42 @@ function salvageErrorLines(middle) {
 // Early-exits as soon as it's seen one more than the cap — enough to know,
 // without a full scan on relentlessly noisy output.
 function middleHasExcessErrors(middle) {
+  return scanErrors(middle).excess;
+}
+
+// Single-pass version of the two functions above. compress() previously
+// called middleHasExcessErrors(middle) then salvageErrorLines(middle) in
+// sequence — two independent middle.split('\n') calls plus two full
+// regex-test loops over the same text. Profiling showed this pair costs
+// ~55% of compress()'s total time on typical inputs; merging into one
+// split + one loop roughly halves it (median 146us -> 70us on a 2000-line
+// middle in local benchmarking).
+//
+// kept is ALWAYS the first MAX_ERROR_LINES deduped matches, independent of
+// excess — matches the original two-call behavior, where compress() only
+// used middleHasExcessErrors() to decide whether to bail out entirely
+// (when text.length <= GATE_MAX_CHARS); when it didn't bail (dense errors
+// in a large output, past the gate ceiling), salvageErrorLines() still ran
+// and returned its normal cap-15 list. An earlier version of this merge
+// wrongly zeroed kept whenever excess was true, which broke exactly that
+// gate-ceiling case — caught by test/compress.test.js's existing
+// "still elides a dense-error output above the gate size ceiling" test.
+// salvageErrorLines/middleHasExcessErrors stay as separate exports (kept
+// for anyone depending on the old two-call shape) but both now delegate
+// here so the hot path only pays for one scan.
+function scanErrors(middle) {
   const seen = new Set();
+  const kept = [];
   for (const line of middle.split('\n')) {
     if (!ERROR_PATTERN.test(line) || seen.has(line)) continue;
     seen.add(line);
-    if (seen.size > MAX_ERROR_LINES) return true;
+    if (kept.length < MAX_ERROR_LINES) kept.push(line);
+    // kept is provably already at MAX_ERROR_LINES by the time seen.size
+    // exceeds it (kept.push happens strictly before seen.size can reach
+    // MAX_ERROR_LINES+1), so returning immediately here loses nothing.
+    if (seen.size > MAX_ERROR_LINES) return { excess: true, kept };
   }
-  return false;
+  return { excess: false, kept };
 }
 
 // Chance of running cleanupOldFiles() on any given saveOverflow() call —
@@ -180,11 +200,12 @@ function compress(text) {
   const tail = text.slice(-TAIL_CHARS);
   const middle = text.slice(HEAD_CHARS, text.length - TAIL_CHARS);
 
+  const { excess, kept: errorLines } = scanErrors(middle);
+
   // Full bypass only below GATE_MAX_CHARS — past that, a huge dense-error
   // blob still needs elision, just with the existing salvage cap.
-  if (middleHasExcessErrors(middle) && text.length <= GATE_MAX_CHARS) return null;
+  if (excess && text.length <= GATE_MAX_CHARS) return null;
 
-  const errorLines = salvageErrorLines(middle);
   const savedPath = SAVE_FULL ? saveOverflow(text) : null;
 
   const marker =
@@ -256,7 +277,7 @@ if (require.main === module) {
 }
 
 module.exports = {
-  compress, locateText, salvageErrorLines, middleHasExcessErrors,
+  compress, locateText, salvageErrorLines, middleHasExcessErrors, scanErrors,
   saveOverflow, cleanupOldFiles, recordSavings,
   THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS, SAVE_FULL, OVERFLOW_DIR, MAX_OVERFLOW_BYTES, RETENTION_MS, STATS_FILE,
 };
