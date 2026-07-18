@@ -113,6 +113,38 @@ class CompressTests(unittest.TestCase):
         big = "X" * 5000
         self.assertIsNone(comb._on_transform_tool_result(tool_name="terminal", args={}, result=big))
 
+    # _scan_errors merges _middle_has_excess_errors + _salvage_error_lines
+    # into one pass, mirroring scripts/compress-tool-output.js's scanErrors.
+    # These lock in the contract compress() relies on: kept is ALWAYS the
+    # first MAX_ERROR_LINES deduped matches regardless of excess.
+
+    def test_scan_errors_kept_populated_when_excess_true(self):
+        many_errors = "\n".join(f"Error: case {i}" for i in range(20))
+        excess, kept = self.comb._scan_errors(many_errors)
+        self.assertTrue(excess)
+        self.assertTrue(kept, "kept must not be emptied just because excess is true")
+        self.assertEqual(len(kept), 15)  # MAX_ERROR_LINES
+        self.assertEqual(kept[0], "Error: case 0")
+
+    def test_scan_errors_sparse_case(self):
+        middle = "noise\n" * 50 + "Error: one\nnoise\nError: two\n" + "noise\n" * 50
+        excess, kept = self.comb._scan_errors(middle)
+        self.assertFalse(excess)
+        self.assertEqual(kept, ["Error: one", "Error: two"])
+
+    def test_scan_errors_matches_legacy_functions(self):
+        cases = [
+            "B\n" * 2000,
+            "Traceback (most recent call last):\nValueError: bad input\n" + "B\n" * 500,
+            "\n".join(f"Error: failure case {i}" for i in range(20)) + "\n" + "B\n" * 500,
+            "Error: one\nError: two\nError: three\n" + "B\n" * 500,
+        ]
+        for middle in cases:
+            with self.subTest(middle=middle[:30]):
+                excess, kept = self.comb._scan_errors(middle)
+                self.assertEqual(excess, self.comb._middle_has_excess_errors(middle))
+                self.assertEqual(kept, self.comb._salvage_error_lines(middle))
+
 
 if __name__ == "__main__":
     unittest.main()

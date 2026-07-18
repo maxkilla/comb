@@ -65,16 +65,38 @@ def _looks_like_error(text: str) -> bool:
 def _middle_has_excess_errors(middle: str) -> bool:
     """True if *middle* has more distinct error-looking lines than
     _salvage_error_lines can keep (MAX_ERROR_LINES) -- i.e. salvage would
-    have to drop some. Early-exits once it's seen enough to know, same
-    trick as _looks_like_error."""
+    have to drop some."""
+    return _scan_errors(middle)[0]
+
+
+def _salvage_error_lines(middle: str) -> List[str]:
+    return _scan_errors(middle)[1]
+
+
+def _scan_errors(middle: str) -> tuple[bool, List[str]]:
+    """Single-pass merge of _middle_has_excess_errors + _salvage_error_lines
+    (ported from scripts/compress-tool-output.js's scanErrors -- see that
+    file for the profiling numbers and the gate-ceiling bug this shape
+    guards against). One split + one regex loop instead of two.
+
+    kept is ALWAYS the first MAX_ERROR_LINES deduped matches, independent
+    of excess -- compress() only uses excess to decide whether to bail out
+    entirely; when it doesn't bail (dense errors past GATE_MAX_CHARS),
+    salvage still needs its normal capped list.
+    """
     seen = set()
+    kept: List[str] = []
+    excess = False
     for line in middle.split("\n"):
         if not _ERROR_PATTERN.search(line) or line in seen:
             continue
         seen.add(line)
+        if len(kept) < MAX_ERROR_LINES:
+            kept.append(line)
         if len(seen) > MAX_ERROR_LINES:
-            return True
-    return False
+            excess = True
+            break
+    return excess, kept
 
 
 def compress(text: str) -> Optional[str]:
@@ -92,13 +114,13 @@ def compress(text: str) -> Optional[str]:
     error_lines: List[str] = []
     if _looks_like_error(text):
         middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
+        excess, error_lines = _scan_errors(middle)
         # TACO-style critical gate: too many error lines to salvage safely --
         # leave the whole output untouched, but only below GATE_MAX_CHARS.
         # Past that, a huge dense-error blob still needs elision, just with
         # the existing salvage cap.
-        if _middle_has_excess_errors(middle) and len(text) <= GATE_MAX_CHARS:
+        if excess and len(text) <= GATE_MAX_CHARS:
             return None
-        error_lines = _salvage_error_lines(middle)
 
     marker = f"\n… [comb: elided {len(text) - HEAD_CHARS - TAIL_CHARS} chars"
     if error_lines:
@@ -107,18 +129,6 @@ def compress(text: str) -> Optional[str]:
     error_block = ("\n".join(error_lines) + "\n") if error_lines else ""
 
     return head + marker + error_block + tail
-
-
-def _salvage_error_lines(middle: str) -> List[str]:
-    seen = set()
-    kept: List[str] = []
-    for line in middle.split("\n"):
-        if _ERROR_PATTERN.search(line) and line not in seen:
-            seen.add(line)
-            kept.append(line)
-            if len(kept) >= MAX_ERROR_LINES:
-                break
-    return kept
 
 
 def _on_transform_tool_result(
