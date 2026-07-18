@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { compress, locateText, salvageErrorLines, middleHasExcessErrors } = require('../scripts/compress-tool-output.js');
+const { compress, locateText, salvageErrorLines, middleHasExcessErrors, scanErrors } = require('../scripts/compress-tool-output.js');
 
 test('compress: leaves short text untouched', () => {
   assert.equal(compress('short output'), null);
@@ -99,3 +99,44 @@ test('locateText: returns null for unrecognized shapes (fail safe, never guesses
   assert.equal(locateText(null), null);
 });
 
+// scanErrors merges middleHasExcessErrors + salvageErrorLines into one pass
+// (single split('\n'), single regex-test loop) for a measured ~2x speedup
+// on the hot path. These tests lock in the contract compress() actually
+// relies on: kept is ALWAYS the first MAX_ERROR_LINES deduped matches,
+// regardless of excess -- an earlier version of this merge wrongly zeroed
+// kept whenever excess was true, which broke the gate-ceiling case in
+// compress() (dense errors in output too large to bypass). Caught by the
+// "still elides a dense-error output above the gate size ceiling" test
+// above; these tests exercise scanErrors directly so a future refactor
+// can't reintroduce the same bug without a JS test failing on this file
+// specifically, not just transitively through compress().
+
+test('scanErrors: kept is populated even when excess is true (the bug this guards against)', () => {
+  const manyErrors = Array.from({ length: 20 }, (_, i) => `Error: case ${i}`).join('\n');
+  const { excess, kept } = scanErrors(manyErrors);
+  assert.equal(excess, true);
+  assert.ok(kept.length > 0, 'kept must not be emptied just because excess is true');
+  assert.equal(kept.length, 15); // MAX_ERROR_LINES
+  assert.equal(kept[0], 'Error: case 0');
+});
+
+test('scanErrors: excess false and kept under cap for a normal sparse-error middle', () => {
+  const middle = 'noise\n'.repeat(50) + 'Error: one\nnoise\nError: two\n' + 'noise\n'.repeat(50);
+  const { excess, kept } = scanErrors(middle);
+  assert.equal(excess, false);
+  assert.deepEqual(kept, ['Error: one', 'Error: two']);
+});
+
+test('scanErrors: matches middleHasExcessErrors + salvageErrorLines exactly across cases', () => {
+  const cases = [
+    'B\n'.repeat(2000),
+    'Traceback (most recent call last):\nValueError: bad input\n' + 'B\n'.repeat(500),
+    Array.from({ length: 20 }, (_, i) => `Error: failure case ${i}`).join('\n') + '\n' + 'B\n'.repeat(500),
+    'Error: one\nError: two\nError: three\n' + 'B\n'.repeat(500),
+  ];
+  for (const middle of cases) {
+    const { excess, kept } = scanErrors(middle);
+    assert.equal(excess, middleHasExcessErrors(middle));
+    assert.deepEqual(kept, salvageErrorLines(middle));
+  }
+});
