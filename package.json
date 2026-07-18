@@ -4,7 +4,9 @@
   "description": "Minimal code AND minimal words, combined. YAGNI/terse-prose persona plus a deterministic tool-output compressor, for Claude Code and Hermes.",
   "license": "MIT",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "benchmark": "node benchmarks/vs-rdxmin.js",
+    "benchmark:speed": "node benchmarks/speed.js"
   },
   "engines": {
     "node": ">=18"
