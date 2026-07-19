@@ -1,5 +1,7 @@
 # comb
 
+<img src="assets/logo.png" alt="comb logo" width="200">
+
 Minimal code AND minimal words, combined. Two blades: what you build, how you talk about it.
 
 - **Blade 1 — code:** an efficiency ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum code). Stop at the first rung that holds.
