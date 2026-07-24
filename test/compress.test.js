@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { compress, locateText, salvageErrorLines, middleHasExcessErrors, scanErrors } = require('../scripts/compress-tool-output.js');
+const { compress, locateText, salvageErrorLines, middleHasExcessErrors, scanErrors, looksLikeJson, snapToJsonBoundary } = require('../scripts/compress-tool-output.js');
 
 test('compress: leaves short text untouched', () => {
   assert.equal(compress('short output'), null);
@@ -139,4 +139,60 @@ test('scanErrors: matches middleHasExcessErrors + salvageErrorLines exactly acro
     assert.equal(excess, middleHasExcessErrors(middle));
     assert.deepEqual(kept, salvageErrorLines(middle));
   }
+});
+
+// JSON-aware boundary snapping. A raw HEAD_CHARS/TAIL_CHARS char-index cut
+// lands mid-object about as often as not on pretty-printed JSON tool
+// output, producing invalid JSON and context-free error salvage lines.
+// snapToJsonBoundary finds the nearest complete-element boundary (a line
+// that's just a closing brace/bracket) via bounded line search -- not a
+// real parser, deliberately, per the efficiency ladder.
+
+test('looksLikeJson: true for objects and arrays, false for plain text', () => {
+  assert.equal(looksLikeJson('{"a":1}'), true);
+  assert.equal(looksLikeJson('[1,2,3]'), true);
+  assert.equal(looksLikeJson('  \n  {"a":1}'), true); // leading whitespace tolerated
+  assert.equal(looksLikeJson('plain log output\nline 2'), false);
+  assert.equal(looksLikeJson('Traceback (most recent call last):'), false);
+});
+
+test('snapToJsonBoundary: finds nearest closing-brace line within 8 lines, backward', () => {
+  const text = '{\n  "a": 1,\n  "b": {\n    "c": 2\n  },\n  "d": 3\n}\n';
+  // cut mid "d": 3 line -- nearest backward boundary is the "  }," line above it
+  const cutIndex = text.indexOf('"d"') + 2;
+  const snapped = snapToJsonBoundary(text, cutIndex, 'backward');
+  assert.notEqual(snapped, null);
+  assert.ok(text.slice(0, snapped).trimEnd().endsWith('},'));
+});
+
+test('snapToJsonBoundary: returns null when no boundary within 8 lines (safe fallback)', () => {
+  const text = Array.from({ length: 20 }, (_, i) => `  "key${i}": "value with no braces at all"`).join(',\n');
+  const snapped = snapToJsonBoundary(text, 100, 'backward');
+  assert.equal(snapped, null);
+});
+
+test('compress: JSON tool output -- head chunk ends on a complete element boundary, not mid-object', () => {
+  const items = Array.from({ length: 300 }, (_, i) => ({
+    id: i, name: `item_${i}`, status: i % 41 === 0 ? 'error' : 'ok',
+  }));
+  const jsonOutput = JSON.stringify({ results: items }, null, 2);
+  const result = compress(jsonOutput);
+  assert.notEqual(result, null);
+
+  const markerIdx = result.indexOf('… [comb:');
+  const headChunk = result.slice(0, markerIdx);
+  // The old raw-cut behavior would end mid-line/mid-object; the fix should
+  // land on a clean boundary line ("},", "}", "],", or "]") once trailing
+  // whitespace is trimmed.
+  assert.match(headChunk.trimEnd(), /[}\]],?$/, `head chunk should end on a clean brace boundary, got: ${JSON.stringify(headChunk.slice(-60))}`);
+});
+
+test('compress: non-JSON text is completely unaffected by the boundary-snap change', () => {
+  const head = 'A'.repeat(1200);
+  const middle = 'B'.repeat(5000);
+  const tail = 'C'.repeat(800);
+  const result = compress(head + middle + tail);
+  // Identical to the pre-existing behavior test: exact head/tail preserved
+  assert.ok(result.startsWith(head));
+  assert.ok(result.endsWith(tail));
 });

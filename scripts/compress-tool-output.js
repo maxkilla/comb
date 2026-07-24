@@ -193,12 +193,61 @@ function cleanupOldFiles() {
   return cleaned;
 }
 
+// Cheap looks-like-JSON check -- first non-whitespace char is { or [. Not a
+// real parse, just enough to decide whether snapToJsonBoundary's search is
+// worth attempting. False positives (e.g. text that starts with { but isn't
+// valid JSON) just mean a wasted bounded search, not incorrect output --
+// snapToJsonBoundary falls back to null (raw cut) if it finds no boundary.
+function looksLikeJson(text) {
+  const c = text.trimStart()[0];
+  return c === '{' || c === '[';
+}
+
+// Finds the nearest line that's just a closing brace/bracket at shallow
+// indent (<=6 spaces) -- the element boundary in pretty-printed JSON
+// (JSON.stringify(x, null, 2)-style output, which is what most tool_result
+// JSON actually looks like). Without this, a raw char-index cut lands
+// mid-object about as often as not, producing output that isn't valid JSON
+// and error-salvage lines with no surrounding context. Bounded 8-line
+// search in the given direction from the char cut; returns null (caller
+// falls back to the raw cut, today's behavior) if nothing nearby matches --
+// this is deliberately NOT a JSON parser, just a pattern match on the
+// common pretty-printed shape, per the efficiency ladder: this rung holds
+// for the common case, a real parser would be over-engineering for it.
+const JSON_BOUNDARY_RE = /^ {0,6}[}\]],?\s*$/;
+function snapToJsonBoundary(text, cutIndex, direction) {
+  const lines = text.split('\n');
+  let pos = 0;
+  let lineIdx = 0;
+  for (; lineIdx < lines.length; lineIdx++) {
+    if (pos + lines[lineIdx].length + 1 > cutIndex) break;
+    pos += lines[lineIdx].length + 1;
+  }
+  for (let step = 0; step < 8; step++) {
+    const i = direction === 'forward' ? lineIdx + step : lineIdx - step;
+    if (i < 0 || i >= lines.length) continue;
+    if (JSON_BOUNDARY_RE.test(lines[i])) {
+      let offset = 0;
+      for (let j = 0; j <= i; j++) offset += lines[j].length + 1;
+      return offset;
+    }
+  }
+  return null;
+}
+
 function compress(text) {
   if (text.length <= THRESHOLD) return null; // not worth touching
 
-  const head = text.slice(0, HEAD_CHARS);
-  const tail = text.slice(-TAIL_CHARS);
-  const middle = text.slice(HEAD_CHARS, text.length - TAIL_CHARS);
+  let headCut = HEAD_CHARS;
+  let tailCut = text.length - TAIL_CHARS;
+  if (looksLikeJson(text)) {
+    headCut = snapToJsonBoundary(text, headCut, 'backward') ?? headCut;
+    tailCut = snapToJsonBoundary(text, tailCut, 'forward') ?? tailCut;
+  }
+
+  const head = text.slice(0, headCut);
+  const tail = text.slice(tailCut);
+  const middle = text.slice(headCut, tailCut);
 
   const { excess, kept: errorLines } = scanErrors(middle);
 
@@ -278,6 +327,7 @@ if (require.main === module) {
 
 module.exports = {
   compress, locateText, salvageErrorLines, middleHasExcessErrors, scanErrors,
+  looksLikeJson, snapToJsonBoundary,
   saveOverflow, cleanupOldFiles, recordSavings,
   THRESHOLD, HEAD_CHARS, TAIL_CHARS, GATE_MAX_CHARS, SAVE_FULL, OVERFLOW_DIR, MAX_OVERFLOW_BYTES, RETENTION_MS, STATS_FILE,
 };

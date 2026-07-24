@@ -6,6 +6,7 @@ Mirrors test/compress.test.js. Stdlib-only — run with:
 """
 
 import importlib.util
+import json
 import os
 import unittest
 from pathlib import Path
@@ -131,6 +132,49 @@ class CompressTests(unittest.TestCase):
         excess, kept = self.comb._scan_errors(middle)
         self.assertFalse(excess)
         self.assertEqual(kept, ["Error: one", "Error: two"])
+
+    def test_looks_like_json(self):
+        self.assertTrue(self.comb._looks_like_json('{"a":1}'))
+        self.assertTrue(self.comb._looks_like_json("[1,2,3]"))
+        self.assertTrue(self.comb._looks_like_json('  \n  {"a":1}'))
+        self.assertFalse(self.comb._looks_like_json("plain log output\nline 2"))
+        self.assertFalse(self.comb._looks_like_json("Traceback (most recent call last):"))
+
+    def test_snap_to_json_boundary_finds_nearby_brace(self):
+        text = '{\n  "a": 1,\n  "b": {\n    "c": 2\n  },\n  "d": 3\n}\n'
+        cut_index = text.index('"d"') + 2
+        snapped = self.comb._snap_to_json_boundary(text, cut_index, "backward")
+        self.assertIsNotNone(snapped)
+        self.assertTrue(text[:snapped].rstrip().endswith("},"))
+
+    def test_snap_to_json_boundary_returns_none_when_nothing_nearby(self):
+        text = ",\n".join(f'  "key{i}": "value with no braces at all"' for i in range(20))
+        snapped = self.comb._snap_to_json_boundary(text, 100, "backward")
+        self.assertIsNone(snapped)
+
+    def test_compress_json_head_chunk_ends_on_clean_boundary(self):
+        items = [
+            {"id": i, "name": f"item_{i}", "status": "error" if i % 41 == 0 else "ok"}
+            for i in range(300)
+        ]
+        json_output = json.dumps({"results": items}, indent=2)
+        result = self.comb.compress(json_output)
+        self.assertIsNotNone(result)
+        marker_idx = result.index("… [comb:")
+        head_chunk = result[:marker_idx].rstrip()
+        self.assertTrue(
+            head_chunk.endswith("}") or head_chunk.endswith("]") or head_chunk.endswith(",")
+            and (head_chunk.endswith("},") or head_chunk.endswith("],")),
+            f"head chunk should end on a clean brace boundary, got: {head_chunk[-60:]!r}",
+        )
+
+    def test_compress_non_json_text_unaffected_by_boundary_snap(self):
+        head = "A" * 1200
+        middle = "B" * 5000
+        tail = "C" * 800
+        result = self.comb.compress(head + middle + tail)
+        self.assertTrue(result.startswith(head))
+        self.assertTrue(result.endswith(tail))
 
     def test_scan_errors_matches_legacy_functions(self):
         cases = [

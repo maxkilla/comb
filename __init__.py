@@ -99,6 +99,44 @@ def _scan_errors(middle: str) -> tuple[bool, List[str]]:
     return excess, kept
 
 
+_JSON_BOUNDARY_RE = re.compile(r"^ {0,6}[}\]],?\s*$")
+
+
+def _looks_like_json(text: str) -> bool:
+    """Cheap check, not a real parse -- first non-whitespace char is { or [.
+    False positives just mean a wasted bounded search in
+    _snap_to_json_boundary (which falls back to the raw cut), never
+    incorrect output."""
+    stripped = text.lstrip()
+    return bool(stripped) and stripped[0] in "{["
+
+
+def _snap_to_json_boundary(text: str, cut_index: int, direction: str) -> Optional[int]:
+    """Port of the JS compress-tool-output.js snapToJsonBoundary. Finds the
+    nearest line that's just a closing brace/bracket at shallow indent (the
+    element boundary in pretty-printed JSON) within 8 lines of cut_index.
+    Deliberately not a real JSON parser -- see the JS version's comment for
+    why that would be over-engineering for this. Returns None (caller falls
+    back to the raw cut) if nothing nearby matches."""
+    lines = text.split("\n")
+    pos = 0
+    line_idx = 0
+    for line_idx, line in enumerate(lines):
+        if pos + len(line) + 1 > cut_index:
+            break
+        pos += len(line) + 1
+    search_range = (
+        range(line_idx, line_idx + 8) if direction == "forward" else range(line_idx, line_idx - 8, -1)
+    )
+    for i in search_range:
+        if i < 0 or i >= len(lines):
+            continue
+        if _JSON_BOUNDARY_RE.match(lines[i]):
+            offset = sum(len(lines[j]) + 1 for j in range(i + 1))
+            return offset
+    return None
+
+
 def compress(text: str) -> Optional[str]:
     """Return a compressed version of *text*, or ``None`` if under threshold
     or if compression would silently drop error lines it can't fit in the
@@ -106,14 +144,20 @@ def compress(text: str) -> Optional[str]:
     if len(text) <= THRESHOLD:
         return None
 
-    head = text[:HEAD_CHARS]
-    tail = text[-TAIL_CHARS:] if TAIL_CHARS else ""
+    head_cut = HEAD_CHARS
+    tail_cut = len(text) - TAIL_CHARS if TAIL_CHARS else len(text)
+    if _looks_like_json(text):
+        head_cut = _snap_to_json_boundary(text, head_cut, "backward") or head_cut
+        tail_cut = _snap_to_json_boundary(text, tail_cut, "forward") or tail_cut
+
+    head = text[:head_cut]
+    tail = text[tail_cut:] if TAIL_CHARS else ""
 
     # ponytail: elide middle only when an error-looking line exists; otherwise
     # tail alone is enough. Cheap pre-filter skips the regex on clean output.
     error_lines: List[str] = []
     if _looks_like_error(text):
-        middle = text[HEAD_CHARS: len(text) - TAIL_CHARS]
+        middle = text[head_cut:tail_cut]
         excess, error_lines = _scan_errors(middle)
         # TACO-style critical gate: too many error lines to salvage safely --
         # leave the whole output untouched, but only below GATE_MAX_CHARS.
@@ -122,7 +166,7 @@ def compress(text: str) -> Optional[str]:
         if excess and len(text) <= GATE_MAX_CHARS:
             return None
 
-    marker = f"\n… [comb: elided {len(text) - HEAD_CHARS - TAIL_CHARS} chars"
+    marker = f"\n… [comb: elided {tail_cut - head_cut} chars"
     if error_lines:
         marker += f", {len(error_lines)} error line(s) kept below"
     marker += "] …\n"
