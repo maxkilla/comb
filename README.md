@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![tests](https://img.shields.io/badge/tests-48%20passing-brightgreen) ![dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen) ![network](https://img.shields.io/badge/network-zero-brightgreen)
 
-[Quick start](#quick-start) · [What's inside](#whats-in-this-repo) · [Tuning](#tool-output-compressor-tuning-claude-code--hermes) · [Proof](#proof) · [When to skip](#when-to-use--when-to-skip) · [Uninstall](#uninstall)
+[Quick start](#quick-start) · [What's inside](#whats-in-this-repo) · [Tuning](#tool-output-compressor-tuning-claude-code--hermes) · [When to skip](#when-to-use--when-to-skip) · [Uninstall](#uninstall)
 
 ---
 
@@ -98,16 +98,6 @@ Claude Code allows exactly one `statusLine` command — wire it in `~/.claude/se
 }
 ```
 
-## Proof
-
-No committed benchmark numbers right now — `benchmarks/vs-rdxmin.js` replays your own `~/.claude/projects/**/*.jsonl` transcripts through both comb's and rdxmin's real compression code (deterministic, no LLM calls), but its output isn't checked into the repo. Run it yourself:
-
-```bash
-node benchmarks/vs-rdxmin.js
-```
-
-What's real right now: 48 passing tests (29 JS covering `compress-tool-output.js`, 19 Python covering the Hermes port `__init__.py`) exercising the gate-ceiling edge case, JSON-boundary snapping, error-salvage dedup, and disk-recovery behavior — not a benchmark claim, but evidence the compressor does what it says on the inputs it's tested against.
-
 ## When to use / when to skip
 
 **Use it if you…**
@@ -118,13 +108,6 @@ What's real right now: 48 passing tests (29 JS covering `compress-tool-output.js
 **Skip it if you…**
 - are on a Claude Code version whose `tool_response` shape comb's field-guessing (`output`/`stdout`/`content`/`text`/`result`) doesn't match — it no-ops safely rather than guessing wrong, but you won't get compression either
 - want ML-based or fully content-type-routed compression (JSON-specific crushing, AST-aware code compression) — comb is a deterministic head/tail/error-line rule with a JSON-boundary heuristic bolted on, not a routed pipeline with a trained model behind it
-
-## Benchmark
-
-Replays your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) through both comb's and rdxmin's actual compression code — deterministic, zero LLM calls, zero network. Chars before/after elision:
-```bash
-node benchmarks/vs-rdxmin.js
-```
 
 ## Test
 
