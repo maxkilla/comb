@@ -107,16 +107,9 @@ persists full tool output — including anything sensitive that appeared in it �
 
 ## Benchmark
 
-Both replay your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) through both comb's and rdxmin's actual compression code — deterministic, zero LLM calls, zero network.
-
-**Savings** (`benchmarks/vs-rdxmin.js`) — chars before/after elision:
+Replays your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) through both comb's and rdxmin's actual compression code — deterministic, zero LLM calls, zero network. Chars before/after elision:
 ```bash
 node benchmarks/vs-rdxmin.js
-```
-
-**Speed** (`benchmarks/speed.js`) — wall-clock µs per tool_result:
-```bash
-node benchmarks/speed.js
 ```
 
 ## Test
