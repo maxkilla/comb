@@ -1,8 +1,16 @@
 # comb
 
-<img src="assets/logo.png" alt="comb logo" width="200">
+<img src="assets/logo.png" alt="comb logo" width="160">
 
-Minimal code AND minimal words, combined. Two blades: what you build, how you talk about it.
+**Minimal code and minimal words, combined — a YAGNI/terse-prose persona plus a deterministic tool-output compressor, for Claude Code and Hermes.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![tests](https://img.shields.io/badge/tests-48%20passing-brightgreen) ![dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen) ![network](https://img.shields.io/badge/network-zero-brightgreen)
+
+[Quick start](#quick-start) · [What's inside](#whats-in-this-repo) · [Tuning](#tool-output-compressor-tuning-claude-code--hermes) · [Proof](#proof) · [When to skip](#when-to-use--when-to-skip) · [Uninstall](#uninstall)
+
+---
+
+Two blades: what you build, how you talk about it.
 
 - **Blade 1 — code:** an efficiency ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum code). Stop at the first rung that holds.
 - **Blade 2 — prose:** facts and code, no preamble, no restating the ask, no trailing summary. Fragments over sentences where meaning survives.
@@ -41,11 +49,13 @@ Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 | Hermes skill | `skills/comb/SKILL.hermes.md` |
 | Hermes compression plugin | `plugin.yaml` + `__init__.py` (repo root) |
 | Benchmark vs rdxmin | `benchmarks/vs-rdxmin.js` |
-| Tests | `test/compress.test.js`, `test/test_compress.py` |
+| Tests | `test/compress.test.js`, `test/test_compress.py` — 48 passing |
 
 The persona rules are the same content in both. The tool-output compressor (elides oversized Bash/Agent/WebFetch/WebSearch/Grep/Glob/MCP output, keeps head/tail/error lines) is ported to both hosts' equivalent hook point — Claude Code's `PostToolUse` and Hermes' `transform_tool_result`. Deterministic, zero-dependency, zero-network — no external service required.
 
 If a middle section has more distinct error-looking lines than the compressor can salvage (`MAX_ERROR_LINES`, 15), it leaves the output whole instead of guessing which errors to drop — a critical-gate pattern from [TACO](https://www.alphaxiv.org/abs/2604.19572) (arXiv:2604.19572), adapted here as a static rule rather than their self-evolving one. That full bypass only applies below `GATE_MAX_CHARS` (20000 chars) — above it, a dense-error output still needs elision, so it falls back to the normal salvage cap instead of passing an arbitrarily large blob through untouched.
+
+For JSON tool output specifically, the head/tail cut snaps to the nearest complete element boundary (a line that's just a closing brace/bracket) instead of an arbitrary character index — a raw char cut lands mid-object about as often as not on pretty-printed JSON, which produces invalid JSON and context-free error salvage. Not a JSON parser, just a bounded search for the common pretty-printed shape; falls back to a raw cut if no boundary is found nearby.
 
 ## Always-on persona
 
@@ -55,35 +65,6 @@ Comb doesn't wait for the model to notice a trigger word or choose to load a ski
 - **Hermes:** installed by appending the same rules to `~/.hermes/SOUL.md`, the agent's identity slot — loaded unconditionally every session, no skill load required. (This edits a file outside the repo; if you don't want that, delete the appended block from `SOUL.md` and rely on `skills/comb/SKILL.hermes.md` instead, trigger-word activated.)
 
 Either way, `skills/comb/SKILL.md` / `SKILL.hermes.md` stay as the source of truth and remain independently loadable.
-
-## Statusline (Claude Code)
-
-`scripts/comb-statusline.sh` renders a `[COMB]` badge showing rate-limit usage (5h/weekly bars, same data `/usage` shows) and cumulative compressor savings (`⇣NNk tok (Nx)`, read from `~/.claude/comb/stats.json`, written by `compress-tool-output.js` on every elision). Bash-only, no jq/node dependency, symlink-refused reads.
-
-Claude Code allows exactly one `statusLine` command — wire it in `~/.claude/settings.json`:
-```json
-"statusLine": {
-  "type": "command",
-  "command": "bash \"/absolute/path/to/comb/scripts/comb-statusline.sh\""
-}
-```
-
-## Uninstall
-
-**Claude Code:**
-```bash
-claude plugin uninstall comb@comb
-claude plugin marketplace remove comb
-```
-Nothing else to clean up — the plugin doesn't touch any file outside its own install directory except the optional scratch dirs it created (`~/.claude/comb/`, holding `stats.json` and elided-output recovery files under `tool-output/`; safe to `rm -rf` if you don't want them kept). If you wired the statusline, remove the `statusLine` block from `~/.claude/settings.json`.
-
-Known Claude Code issue, not comb-specific: `marketplace remove` doesn't always clear the `extraKnownMarketplaces` entry from `~/.claude/settings.json` ([anthropics/claude-code#9537](https://github.com/anthropics/claude-code/issues/9537)), which can cause the marketplace to silently reappear on next launch. If that happens, check `~/.claude/settings.json` for a leftover `comb` entry under `extraKnownMarketplaces` and remove it by hand.
-
-**Hermes:**
-```bash
-hermes plugins uninstall comb
-```
-Or manually: delete `~/.hermes/plugins/comb/` and remove `comb` from `plugins.enabled`. If you installed the always-on persona (which edits `~/.hermes/SOUL.md` directly), delete the appended comb block from that file — it's a plain text append, easy to spot and remove.
 
 ## Tool-output compressor tuning (Claude Code + Hermes)
 
@@ -105,6 +86,39 @@ the elided marker includes the recovery path. Files older than 7 days are swept 
 persists full tool output — including anything sensitive that appeared in it — to disk, set
 `COMB_COMPRESS_SAVE_FULL=0` if you'd rather lose the recovery file than keep it around.
 
+## Statusline (Claude Code)
+
+`scripts/comb-statusline.sh` renders a `[COMB]` badge showing rate-limit usage (5h/weekly bars, same data `/usage` shows) and cumulative compressor savings (`⇣~NNk tok (Nx)`, read from `~/.claude/comb/stats.json`, written by `compress-tool-output.js` on every elision). The char count is measured exactly; the token figure is the standard ~4-chars-per-token estimate, hence the `~`. Bash-only, no jq/node dependency, symlink-refused reads.
+
+Claude Code allows exactly one `statusLine` command — wire it in `~/.claude/settings.json`:
+```json
+"statusLine": {
+  "type": "command",
+  "command": "bash \"/absolute/path/to/comb/scripts/comb-statusline.sh\""
+}
+```
+
+## Proof
+
+No committed benchmark numbers right now — `benchmarks/vs-rdxmin.js` replays your own `~/.claude/projects/**/*.jsonl` transcripts through both comb's and rdxmin's real compression code (deterministic, no LLM calls), but its output isn't checked into the repo. Run it yourself:
+
+```bash
+node benchmarks/vs-rdxmin.js
+```
+
+What's real right now: 48 passing tests (29 JS covering `compress-tool-output.js`, 19 Python covering the Hermes port `__init__.py`) exercising the gate-ceiling edge case, JSON-boundary snapping, error-salvage dedup, and disk-recovery behavior — not a benchmark claim, but evidence the compressor does what it says on the inputs it's tested against.
+
+## When to use / when to skip
+
+**Use it if you…**
+- run Claude Code or Hermes and want oversized tool output compressed without giving up recoverability (elided text is saved to disk by default, see Tuning above)
+- want a terse-prose/YAGNI persona that's on by default, not opt-in per message
+- work with JSON-heavy tool output (MCP calls, API responses) and want elision that respects element boundaries instead of an arbitrary character cut
+
+**Skip it if you…**
+- are on a Claude Code version whose `tool_response` shape comb's field-guessing (`output`/`stdout`/`content`/`text`/`result`) doesn't match — it no-ops safely rather than guessing wrong, but you won't get compression either
+- want ML-based or fully content-type-routed compression (JSON-specific crushing, AST-aware code compression) — comb is a deterministic head/tail/error-line rule with a JSON-boundary heuristic bolted on, not a routed pipeline with a trained model behind it
+
 ## Benchmark
 
 Replays your real Claude Code transcripts (`~/.claude/projects/**/*.jsonl`) through both comb's and rdxmin's actual compression code — deterministic, zero LLM calls, zero network. Chars before/after elision:
@@ -118,6 +132,23 @@ node benchmarks/vs-rdxmin.js
 npm test                       # Claude Code compressor (scripts/compress-tool-output.js)
 python3 test/test_compress.py  # Hermes plugin (comb/__init__.py)
 ```
+
+## Uninstall
+
+**Claude Code:**
+```bash
+claude plugin uninstall comb@comb
+claude plugin marketplace remove comb
+```
+Nothing else to clean up — the plugin doesn't touch any file outside its own install directory except the optional scratch dirs it created (`~/.claude/comb/`, holding `stats.json` and elided-output recovery files under `tool-output/`; safe to `rm -rf` if you don't want them kept). If you wired the statusline, remove the `statusLine` block from `~/.claude/settings.json`.
+
+Known Claude Code issue, not comb-specific: `marketplace remove` doesn't always clear the `extraKnownMarketplaces` entry from `~/.claude/settings.json` ([anthropics/claude-code#9537](https://github.com/anthropics/claude-code/issues/9537)), which can cause the marketplace to silently reappear on next launch. If that happens, check `~/.claude/settings.json` for a leftover `comb` entry under `extraKnownMarketplaces` and remove it by hand.
+
+**Hermes:**
+```bash
+hermes plugins uninstall comb
+```
+Or manually: delete `~/.hermes/plugins/comb/` and remove `comb` from `plugins.enabled`. If you installed the always-on persona (which edits `~/.hermes/SOUL.md` directly), delete the appended comb block from that file — it's a plain text append, easy to spot and remove.
 
 ## License
 
