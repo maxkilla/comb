@@ -70,7 +70,11 @@ if [ -z "$LIMITS" ]; then
 fi
 
 # Cumulative savings from the tool-output compressor ledger
-# (scripts/compress-tool-output.js recordSavings). Measured, not estimated.
+# (scripts/compress-tool-output.js recordSavings). Char count (SAVED) is
+# measured exactly. The token figure below is NOT measured -- it's the
+# standard ~4-chars-per-token approximation, hence the leading '~'. Don't
+# drop that marker; a precise-looking token count next to real dollar/limit
+# figures elsewhere on this line would be a silently wrong claim.
 # Digits-only extract; symlink-refused before reading.
 STATS="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/comb/stats.json"
 if [ -f "$STATS" ] && [ ! -L "$STATS" ]; then
@@ -78,9 +82,9 @@ if [ -f "$STATS" ] && [ ! -L "$STATS" ]; then
   EVENTS=$(head -c 256 "$STATS" 2>/dev/null | grep -oE '"events":[0-9]+' | grep -oE '[0-9]+' | head -1)
   if [ -n "$SAVED" ] && [ "$SAVED" -gt 0 ] 2>/dev/null; then
     TOK=$(( SAVED / 4 ))
-    if   [ "$TOK" -ge 1000000 ]; then LIMITS="$LIMITS ⇣$(( TOK / 1000000 ))M tok"
-    elif [ "$TOK" -ge 1000 ];    then LIMITS="$LIMITS ⇣$(( TOK / 1000 ))k tok"
-    elif [ "$TOK" -gt 0 ];       then LIMITS="$LIMITS ⇣${TOK} tok"; fi
+    if   [ "$TOK" -ge 1000000 ]; then LIMITS="$LIMITS ⇣~$(( TOK / 1000000 ))M tok"
+    elif [ "$TOK" -ge 1000 ];    then LIMITS="$LIMITS ⇣~$(( TOK / 1000 ))k tok"
+    elif [ "$TOK" -gt 0 ];       then LIMITS="$LIMITS ⇣~${TOK} tok"; fi
     [ -n "$EVENTS" ] && [ "$EVENTS" -gt 0 ] 2>/dev/null && LIMITS="$LIMITS (${EVENTS}x)"
   fi
 fi
