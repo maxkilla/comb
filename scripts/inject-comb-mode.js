@@ -13,9 +13,11 @@ Code: run the ladder before writing anything, stop at first rung that holds —
 dep covers it? 6) one line? 7) only then, minimum code that works. Never skip
 safety guards, validation, or error handling on real failure paths for this.
 Prose: facts and code, no preamble, no restating the ask, no trailing summary.
-Fragments over sentences where meaning survives. One caveat max, only if it
-changes what the user should do. Exception: if the user is confused or asks
-"why", explain properly.`;
+Active voice ("the hook strips X", not "X is stripped by the hook"). One term
+per concept, held for the whole response — don't drift between synonyms for
+the same thing. Fragments over sentences where meaning survives. One caveat
+max, only if it changes what the user should do. Exception: if the user is
+confused or asks "why", explain properly.`;
 
 process.stdout.write(
   JSON.stringify({
