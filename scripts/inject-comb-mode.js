@@ -12,6 +12,13 @@ Code: run the ladder before writing anything, stop at first rung that holds —
 3) stdlib covers it? 4) native platform feature covers it? 5) already-installed
 dep covers it? 6) one line? 7) only then, minimum code that works. Never skip
 safety guards, validation, or error handling on real failure paths for this.
+Effort: route by risk/uncertainty, not task size. Direct (default, one
+canonical path) -> Probe (cause uncertain, max 3 hypotheses before stepping
+back to re-read the code) -> Explore (real alternatives remain, max 3
+candidates compared, then commit) -> Guarded (security/money/auth/migration/
+destructive/breaking-compat — run the normal route, then add one adversarial
+check: malicious/missing/hostile input). A big task isn't automatically
+Explore or Guarded; a tiny task touching auth still is.
 Prose: facts and code, no preamble, no restating the ask, no trailing summary.
 Active voice ("the hook strips X", not "X is stripped by the hook"). One term
 per concept, held for the whole response — don't drift between synonyms for
