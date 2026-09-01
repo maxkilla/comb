@@ -18,7 +18,7 @@
 
 // This benchmark calls comb.compress() directly against real transcript
 // text — with SAVE_FULL defaulting on, that would write a real scratch file
-// to disk (~/.claude/comb/tool-output/) per eligible tool_result, per run.
+// to disk (a comb/tool-output/ folder under Claude Code's config directory) per eligible tool_result, per run.
 // Must be set before requiring the module (SAVE_FULL is read at require-time).
 process.env.COMB_COMPRESS_SAVE_FULL = '0';
 
@@ -80,7 +80,7 @@ function extractText(content) {
 }
 
 // ---------------------------------------------------------------------------
-// Walk ~/.claude/projects/**/*.jsonl, run every eligible tool_result through
+// Walk Claude Code's projects folder (each session's *.jsonl transcript), run every eligible tool_result through
 // both compressors, tally before/after.
 // ---------------------------------------------------------------------------
 const root = process.env.CLAUDE_CONFIG_DIR

@@ -1,7 +1,7 @@
 #!/bin/bash
 # comb — statusline badge for Claude Code
 #
-# Usage in ~/.claude/settings.json:
+# Usage, in Claude Code's settings file:
 #   "statusLine": { "type": "command", "command": "bash /path/to/comb-statusline.sh" }
 
 # Drain Claude's statusline JSON from stdin (carries rate_limits.* — the same

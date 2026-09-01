@@ -30,7 +30,7 @@ Restart Claude Code (or start a new session) and it's live — no config file to
 ```bash
 hermes plugins install maxkilla/comb --enable
 ```
-(Manual install: `cp plugin.yaml __init__.py ~/.hermes/plugins/comb/`, then add `comb` under `plugins.enabled` in your Hermes config — Plugin's `kind` is omitted in `plugin.yaml`, so Hermes defaults it to `standalone`, which is what makes that `enabled` entry required. Project-local install: `./comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`. The persona skill is separate from the plugin — copy `skills/comb/SKILL.hermes.md` to `~/.hermes/skills/software-development/comb/SKILL.md` if you want comb mode without the always-on `SOUL.md` edit described below.)
+(Manual install: `cp plugin.yaml __init__.py` into a `comb` folder under your Hermes plugins directory, then add `comb` under `plugins.enabled` in your Hermes config — Plugin's `kind` is omitted in `plugin.yaml`, so Hermes defaults it to `standalone`, which is what makes that `enabled` entry required. Project-local install: `./comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`. The persona skill is separate from the plugin — copy `skills/comb/SKILL.hermes.md` into the software-development skills folder under your Hermes config if you want comb mode without the always-on SOUL.md edit described below.)
 
 That's the whole install. Everything below is what it does and how to tune it — skip straight to [Uninstall](#uninstall) if you just want to try it and back out cleanly.
 
@@ -62,7 +62,7 @@ For JSON tool output specifically, the head/tail cut snaps to the nearest comple
 Comb doesn't wait for the model to notice a trigger word or choose to load a skill:
 
 - **Claude Code:** the plugin's `UserPromptSubmit` hook (`scripts/inject-comb-mode.js`) injects the persona rules as `additionalContext` on every turn.
-- **Hermes:** installed by appending the same rules to `~/.hermes/SOUL.md`, the agent's identity slot — loaded unconditionally every session, no skill load required. (This edits a file outside the repo; if you don't want that, delete the appended block from `SOUL.md` and rely on `skills/comb/SKILL.hermes.md` instead, trigger-word activated.)
+- **Hermes:** installed by appending the same rules to Hermes' SOUL.md identity file (in the Hermes config directory), loaded unconditionally every session, no skill load required. (This edits a file outside the repo; if you don't want that, delete the appended block from SOUL.md and rely on `skills/comb/SKILL.hermes.md` instead, trigger-word activated.)
 
 Either way, `skills/comb/SKILL.md` / `SKILL.hermes.md` stay as the source of truth and remain independently loadable.
 
@@ -79,8 +79,8 @@ COMB_COMPRESS_SAVE_FULL=0  # Claude Code only: disable saving the full untouched
 ```
 
 **Elided output recovery (Claude Code only).** Elision is otherwise irreversible, so by default
-(`COMB_COMPRESS_SAVE_FULL` unset or `1`) the full original text is saved to
-`~/.claude/comb/tool-output/` (mode `0600`, capped at 1MB per file, head75/tail25 if larger) and
+(`COMB_COMPRESS_SAVE_FULL` unset or `1`) the full original text is saved to a `comb/tool-output/`
+folder under Claude Code's config directory (mode `0600`, capped at 1MB per file, head75/tail25 if larger) and
 the elided marker includes the recovery path. Files older than 7 days are swept opportunistically
 (2% chance per save, no dedicated hot-path scan) rather than requiring a cron job. Since this
 persists full tool output — including anything sensitive that appeared in it — to disk, set
@@ -88,9 +88,9 @@ persists full tool output — including anything sensitive that appeared in it �
 
 ## Statusline (Claude Code)
 
-`scripts/comb-statusline.sh` renders a `[COMB]` badge showing rate-limit usage (5h/weekly bars, same data `/usage` shows) and cumulative compressor savings (`⇣~NNk tok (Nx)`, read from `~/.claude/comb/stats.json`, written by `compress-tool-output.js` on every elision). The char count is measured exactly; the token figure is the standard ~4-chars-per-token estimate, hence the `~`. Bash-only, no jq/node dependency, symlink-refused reads.
+`scripts/comb-statusline.sh` renders a `[COMB]` badge showing rate-limit usage (5h/weekly bars, same data `/usage` shows) and cumulative compressor savings (`⇣~NNk tok (Nx)`, read from a `comb/stats.json` file under Claude Code's config directory, written by `compress-tool-output.js` on every elision). The char count is measured exactly; the token figure is the standard ~4-chars-per-token estimate, hence the `~`. Bash-only, no jq/node dependency, symlink-refused reads.
 
-Claude Code allows exactly one `statusLine` command — wire it in `~/.claude/settings.json`:
+Claude Code allows exactly one `statusLine` command — wire it in Claude Code's settings file:
 ```json
 "statusLine": {
   "type": "command",
@@ -123,15 +123,15 @@ python3 test/test_compress.py  # Hermes plugin (comb/__init__.py)
 claude plugin uninstall comb@comb
 claude plugin marketplace remove comb
 ```
-Nothing else to clean up — the plugin doesn't touch any file outside its own install directory except the optional scratch dirs it created (`~/.claude/comb/`, holding `stats.json` and elided-output recovery files under `tool-output/`; safe to `rm -rf` if you don't want them kept). If you wired the statusline, remove the `statusLine` block from `~/.claude/settings.json`.
+Nothing else to clean up — the plugin doesn't touch any file outside its own install directory except the optional scratch dirs it created (a `comb/` folder under Claude Code's config directory, holding `stats.json` and elided-output recovery files under `tool-output/`; safe to remove if you don't want them kept). If you wired the statusline, remove the `statusLine` block from Claude Code's settings file.
 
-Known Claude Code issue, not comb-specific: `marketplace remove` doesn't always clear the `extraKnownMarketplaces` entry from `~/.claude/settings.json` ([anthropics/claude-code#9537](https://github.com/anthropics/claude-code/issues/9537)), which can cause the marketplace to silently reappear on next launch. If that happens, check `~/.claude/settings.json` for a leftover `comb` entry under `extraKnownMarketplaces` and remove it by hand.
+Known Claude Code issue, not comb-specific: `marketplace remove` doesn't always clear the corresponding marketplace entry from Claude Code's settings file ([anthropics/claude-code#9537](https://github.com/anthropics/claude-code/issues/9537)), which can cause the marketplace to silently reappear on next launch. If that happens, check that settings file for a leftover `comb` entry and remove it by hand.
 
 **Hermes:**
 ```bash
 hermes plugins uninstall comb
 ```
-Or manually: delete `~/.hermes/plugins/comb/` and remove `comb` from `plugins.enabled`. If you installed the always-on persona (which edits `~/.hermes/SOUL.md` directly), delete the appended comb block from that file — it's a plain text append, easy to spot and remove.
+Or manually: delete the `comb` folder under your Hermes plugins directory and remove `comb` from `plugins.enabled`. If you installed the always-on persona (which edits Hermes' SOUL.md file directly), delete the appended comb block from that file — it's a plain text append, easy to spot and remove.
 
 ## License
 

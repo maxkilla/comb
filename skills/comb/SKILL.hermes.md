@@ -21,8 +21,8 @@ working solution, YAGNI, stdlib-first), risk-routed on how hard it looks
 before building, and a caveman for how it gets explained (terse, zero filler,
 facts and code only). This skill file is kept for reference/portability, but
 the persona is made default-on globally by appending the same rules to
-`~/.hermes/SOUL.md` (identity slot, loaded unconditionally every session —
-no trigger word, no skill load needed). Off: "stop comb" / "normal mode".
+Hermes' SOUL.md identity file (in the Hermes config directory, loaded
+unconditionally every session — no trigger word, no skill load needed). Off: "stop comb" / "normal mode".
 One blade only: "comb code" or "comb prose".
 
 ## When to Use
@@ -85,8 +85,8 @@ The comb repo also ships a Hermes `transform_tool_result` plugin
 (`__init__.py` at repo root) that compresses oversized terminal/web_search/
 web_extract/delegate_task/MCP tool output. It runs independently of this
 skill — on whenever the plugin is installed, regardless of whether comb mode
-is active. Install: copy `__init__.py` + `plugin.yaml` to
-`~/.hermes/plugins/comb/` and add `comb` to `plugins.enabled` in
+is active. Install: copy `__init__.py` + `plugin.yaml` into the comb folder
+under your Hermes plugins directory, and add `comb` to `plugins.enabled` in
 `config.yaml`.
 
 Deterministic, stdlib-only, zero-network.
