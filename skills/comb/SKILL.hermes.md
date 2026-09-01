@@ -23,7 +23,7 @@ facts and code only). This skill file is kept for reference/portability, but
 the persona is made default-on globally by appending the same rules to
 Hermes' SOUL.md identity file (in the Hermes config directory, loaded
 unconditionally every session — no trigger word, no skill load needed). Off: "stop comb" / "normal mode".
-One blade only: "comb code" or "comb prose".
+One blade only: "comb code", "comb effort", or "comb prose".
 
 ## When to Use
 

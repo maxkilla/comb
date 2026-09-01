@@ -10,10 +10,11 @@
 
 ---
 
-Two blades: what you build, how you talk about it.
+Three blades: what you build, how hard you look before building it, how you talk about it.
 
 - **Blade 1 — code:** an efficiency ladder (YAGNI → reuse → stdlib → native → existing dep → one line → minimum code). Stop at the first rung that holds.
-- **Blade 2 — prose:** facts and code, no preamble, no restating the ask, no trailing summary. Fragments over sentences where meaning survives.
+- **Blade 2 — effort:** route by risk and uncertainty, not task size — Direct (default) → Probe (cause uncertain, max 3 hypotheses) → Explore (real alternatives, max 3 candidates) → Guarded (security/money/auth/destructive, always add an adversarial check).
+- **Blade 3 — prose:** facts and code, no preamble, no restating the ask, no trailing summary. Fragments over sentences where meaning survives.
 
 Supports Claude Code and Hermes — the two agents this was built for, both of which support the full feature set (persona skill + tool-output compression hook).
 
@@ -30,11 +31,11 @@ Restart Claude Code (or start a new session) and it's live — no config file to
 ```bash
 hermes plugins install maxkilla/comb --enable
 ```
-(Manual install: `cp plugin.yaml __init__.py` into a `comb` folder under your Hermes plugins directory, then add `comb` under `plugins.enabled` in your Hermes config — Plugin's `kind` is omitted in `plugin.yaml`, so Hermes defaults it to `standalone`, which is what makes that `enabled` entry required. Project-local install: `./comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`. The persona skill is separate from the plugin — copy `skills/comb/SKILL.hermes.md` into the software-development skills folder under your Hermes config if you want comb mode without the always-on SOUL.md edit described below.)
+(Manual install: `cp plugin.yaml __init__.py` into a `comb` folder under your Hermes plugins directory, then add `comb` under `plugins.enabled` in your Hermes config — `plugin.yaml` sets `kind: standalone`, which is what makes that `enabled` entry required. Project-local install: `./comb/`, requires `HERMES_ENABLE_PROJECT_PLUGINS=1`. The persona skill is separate from the plugin — copy `skills/comb/SKILL.hermes.md` into the software-development skills folder under your Hermes config if you want comb mode without the always-on SOUL.md edit described below.)
 
 That's the whole install. Everything below is what it does and how to tune it — skip straight to [Uninstall](#uninstall) if you just want to try it and back out cleanly.
 
-Default-on, no trigger word needed — see "Always-on persona" below. Off: "stop comb" / "normal mode". One blade only: "comb code" or "comb prose".
+Default-on, no trigger word needed — see "Always-on persona" below. Off: "stop comb" / "normal mode". One blade only: "comb code", "comb effort", or "comb prose".
 
 Full rules: [`skills/comb/SKILL.md`](skills/comb/SKILL.md).
 
