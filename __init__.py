@@ -120,19 +120,15 @@ def _looks_like_json(text: str) -> bool:
 
 
 def _snap_to_json_boundary(text: str, cut_index: int, direction: str) -> Optional[int]:
-    """Port of the JS compress-tool-output.js snapToJsonBoundary. Finds the
-    nearest line that's just a closing brace/bracket at shallow indent (the
-    element boundary in pretty-printed JSON) within 8 lines of cut_index.
-    Deliberately not a real JSON parser -- see the JS version's comment for
-    why that would be over-engineering for this. Returns None (caller falls
-    back to the raw cut) if nothing nearby matches."""
+    # ponytail: robust to mixed-width chars (wide chars) — accumulate byte
+    # length per line instead of char count for boundary tracking.
     lines = text.split("\n")
     pos = 0
     line_idx = 0
     for line_idx, line in enumerate(lines):
-        if pos + len(line) + 1 > cut_index:
+        if pos + len(line.encode("utf-8")) + 1 > cut_index:
             break
-        pos += len(line) + 1
+        pos += len(line.encode("utf-8")) + 1
     search_range = (
         range(line_idx, line_idx + 8) if direction == "forward" else range(line_idx, line_idx - 8, -1)
     )
