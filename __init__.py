@@ -25,6 +25,12 @@ import re
 from typing import Any, Dict, List, Optional
 
 
+def _debug_skip(reason: str) -> None:
+    if os.environ.get("COMB_COMPRESS_DEBUG", "").strip() == "1":
+        import sys
+        sys.stderr.write(f"[comb] skipped: {reason}\n")
+
+
 def _disabled() -> bool:
     return os.environ.get("COMB_COMPRESS", "").strip().lower() in {"0", "false", "no", "off"}
 
@@ -36,6 +42,8 @@ THRESHOLD = int(os.environ.get("COMB_COMPRESS_THRESHOLD", "3000"))
 # dense-error output only skips compression entirely if it's still small.
 # Above this, letting it through whole would defeat the compressor's whole
 # purpose — fall back to elision + capped salvage instead.
+# ponytail: T4 insight (arXiv:2609.20804): staged elision before summarization
+# is best; recoverable storage (recall_event) rarely used — skip it. No M3 here.
 GATE_MAX_CHARS = int(os.environ.get("COMB_COMPRESS_GATE_MAX", "20000"))
 MAX_ERROR_LINES = 15
 
@@ -142,6 +150,7 @@ def compress(text: str) -> Optional[str]:
     or if compression would silently drop error lines it can't fit in the
     salvage cap (TACO-style critical gate, arXiv:2604.19572)."""
     if len(text) <= THRESHOLD:
+        _debug_skip(f"under threshold ({len(text)} <= {THRESHOLD})")
         return None
 
     head_cut = HEAD_CHARS
@@ -164,6 +173,7 @@ def compress(text: str) -> Optional[str]:
         # Past that, a huge dense-error blob still needs elision, just with
         # the existing salvage cap.
         if excess and len(text) <= GATE_MAX_CHARS:
+            _debug_skip("TACO gate bail: dense errors exceed salvage cap")
             return None
 
     marker = f"\n… [comb: elided {tail_cut - head_cut} chars"
@@ -192,3 +202,10 @@ def _on_transform_tool_result(
 
 def register(ctx) -> None:
     ctx.register_hook("transform_tool_result", _on_transform_tool_result)
+
+
+# ponytail: one runnable check (non-trivial branch in compress)
+if __name__ == "__main__":
+    # ponytail: minimal smoke checks only
+    assert isinstance(compress("x" * 5000), str)
+    assert compress("x" * 500) is None
