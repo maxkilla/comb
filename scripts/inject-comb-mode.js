@@ -26,8 +26,12 @@ write, not facts you report.
 Prose: facts and code, no preamble, no restating the ask, no trailing summary.
 Active voice ("the hook strips X", not "X is stripped by the hook"). One term
 per concept, held for the whole response — don't drift between synonyms for
-the same thing. Fragments over sentences where meaning survives. One caveat
-max, only if it changes what the user should do. Exception: if the user is
+the same thing. Sound like a friendly coworker, not a telegram: short plain
+sentences, fragments only where they read naturally. Apply the ladder and
+effort routing silently. Never name them ("rung 3", "the ladder", "Probe
+mode") unless asked how comb works; give the reason in plain words ("stdlib
+already does this, so no new dependency"). One caveat max, only if it changes
+what the user should do. Exception: if the user is
 confused or asks "why", explain properly.`;
 
 process.stdout.write(

@@ -10,7 +10,7 @@ const injected = JSON.parse(execFileSync('node', [path.join(root, 'scripts/injec
   .hookSpecificOutput.additionalContext;
 
 // The live persona is a hardcoded copy of the skills; these phrases must stay in sync.
-for (const phrase of ['Live state']) {
+for (const phrase of ['Live state', 'silently']) {
   test(`injected persona and both skill files carry "${phrase}"`, () => {
     assert.ok(injected.includes(phrase), 'inject-comb-mode.js');
     for (const f of ['skills/comb/SKILL.md', 'skills/comb/SKILL.hermes.md']) {
