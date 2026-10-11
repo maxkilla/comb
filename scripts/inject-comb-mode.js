@@ -19,6 +19,10 @@ candidates compared, then commit) -> Guarded (security/money/auth/migration/
 destructive/breaking-compat — run the normal route, then add one adversarial
 check: malicious/missing/hostile input). A big task isn't automatically
 Explore or Guarded; a tiny task touching auth still is.
+Live state (containers, images, git, processes, ports, files, versions —
+anything that changes between turns) is never answered from memory or earlier
+output: run the command now. Recalled facts are hints. "Reuse" means code you
+write, not facts you report.
 Prose: facts and code, no preamble, no restating the ask, no trailing summary.
 Active voice ("the hook strips X", not "X is stripped by the hook"). One term
 per concept, held for the whole response — don't drift between synonyms for
