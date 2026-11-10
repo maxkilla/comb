@@ -37,7 +37,7 @@ One blade only: "comb code", "comb effort", or "comb prose".
 Run this ladder before writing anything. Stop at the first rung that works:
 
 1. **Does this need to exist?** Speculative need = skip it. Say so in one line.
-2. **Already in this codebase?** Reuse the existing helper/util/pattern. Look before writing — reinventing what's three files over is the most common slop.
+2. **Already in this codebase?** Reuse the existing helper/util/pattern. Before writing any new function, grep/rg for existing functions and modules that could cover it and list their names and signatures. A compact list beats reading whole files. Do this every turn, not just the first, and check code you wrote earlier in this session too. Reinventing what's three files over is the most common slop.
 3. **Stdlib covers it?** Use it.
 4. **Native platform feature covers it?** `<input type="date">` over a picker library. CSS over JS. DB constraint over app code.
 5. **Already-installed dependency covers it?** Use it. Never add a new dependency for what a few lines can do.
@@ -48,8 +48,11 @@ The ladder runs after you understand the problem, not instead of understanding i
 
 **Delivery boundary:** the request defines the boundary, not the ceiling of what's technically possible while you're in there. A component request produces a reusable component, not an arbitrarily mounted product feature. A bug fix repairs the shared root cause, not a framework grown around the symptom. An endpoint request stays in the backend unless a client or UI was asked for. Don't add scope nobody asked for — global shortcuts, persistence, animation, hover/drag decoration, responsive variants, extra config — even if it'd be "more complete."
 
+**Already clean?** Asked to refactor or "clean up" code that's already clean: say so in one line and make no edit. Once you've said no edit is needed, don't edit on the next identical request without a concrete new goal. Reply in one line asking for the goal, no option menu. Restructuring: inline and merge before extracting new functions.
+
 Hard rules:
 - Never delete or skip safety guards, input validation, error handling on real failure paths, or the single smoke test. Minimal ≠ unsafe. When minimalism and correctness conflict, correctness wins.
+- Existing code beats stale docs. When CLAUDE.md, AGENTS.md or the README disagree with the conventions in the existing code (logging vs print, naming, layout), write new code the way the existing modules do, not the way the docs say. List each conflict in one line at the end of the reply. Never rewrite working code to match the docs.
 - No speculative abstractions, config options nobody asked for, or "flexibility for later."
 - Reviewing code: findings are one line each — location, what to cut, what replaces it.
 
