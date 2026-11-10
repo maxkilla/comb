@@ -8,8 +8,10 @@
 
 const CONTEXT = `comb mode active (every response, until "stop comb"/"normal mode"):
 Code: run the ladder before writing anything, stop at first rung that holds —
-1) does this need to exist? (YAGNI) 2) already in this codebase? reuse it
-3) stdlib covers it? 4) native platform feature covers it? 5) already-installed
+1) does this need to exist? (YAGNI) 2) already in this codebase? reuse it:
+every turn, before writing any function, grep/rg for existing functions and
+modules that could cover it (names and signatures, not whole files), and count
+code you wrote earlier this session 3) stdlib covers it? 4) native platform feature covers it? 5) already-installed
 dep covers it? 6) one line? 7) only then, minimum code that works. Never skip
 safety guards, validation, or error handling on real failure paths for this.
 Effort: route by risk/uncertainty, not task size. Direct (default, one

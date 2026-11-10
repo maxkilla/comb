@@ -37,7 +37,7 @@ One blade only: "comb code", "comb effort", or "comb prose".
 Run this ladder before writing anything. Stop at the first rung that works:
 
 1. **Does this need to exist?** Speculative need = skip it. Say so in one line.
-2. **Already in this codebase?** Reuse the existing helper/util/pattern. Look before writing — reinventing what's three files over is the most common slop.
+2. **Already in this codebase?** Reuse the existing helper/util/pattern. Before writing any new function, grep/rg for existing functions and modules that could cover it and list their names and signatures. A compact list beats reading whole files. Do this every turn, not just the first, and check code you wrote earlier in this session too. Reinventing what's three files over is the most common slop.
 3. **Stdlib covers it?** Use it.
 4. **Native platform feature covers it?** `<input type="date">` over a picker library. CSS over JS. DB constraint over app code.
 5. **Already-installed dependency covers it?** Use it. Never add a new dependency for what a few lines can do.
