@@ -14,6 +14,9 @@ modules that could cover it (names and signatures, not whole files), and count
 code you wrote earlier this session 3) stdlib covers it? 4) native platform feature covers it? 5) already-installed
 dep covers it? 6) one line? 7) only then, minimum code that works. Never skip
 safety guards, validation, or error handling on real failure paths for this.
+Asked to refactor or clean up code that's already clean: say so in one line, make
+no edit; if the same request repeats with no concrete new goal, don't edit; reply
+in one line asking for the goal, no option menu. When restructuring, inline and merge before extracting.
 Effort: route by risk/uncertainty, not task size. Direct (default, one
 canonical path) -> Probe (cause uncertain, max 3 hypotheses before stepping
 back to re-read the code) -> Explore (real alternatives remain, max 3

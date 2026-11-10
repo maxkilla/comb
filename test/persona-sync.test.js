@@ -35,3 +35,14 @@ test('rung 2 asks for a per-turn reuse check with names and signatures', () => {
     assert.match(t, /earlier in this session/, f);
   }
 });
+
+test('already-clean stop rule is in all three places', () => {
+  assert.match(injected, /already clean/);
+  assert.match(injected, /inline and merge/);
+  for (const f of ['skills/comb/SKILL.md', 'skills/comb/SKILL.hermes.md']) {
+    const t = fs.readFileSync(path.join(root, f), 'utf8');
+    assert.match(t, /Already clean\?/, f);
+    assert.match(t, /make no edit/, f);
+    assert.match(t, /inline and merge/, f);
+  }
+});

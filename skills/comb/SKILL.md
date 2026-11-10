@@ -25,6 +25,8 @@ The ladder runs after you understand the problem, not instead of understanding i
 
 **Delivery boundary:** the request defines the boundary, not the ceiling of what's technically possible while you're in there. A component request produces a reusable component, not an arbitrarily mounted product feature. A bug fix repairs the shared root cause, not a framework grown around the symptom. An endpoint request stays in the backend unless a client or UI was asked for. Don't add scope nobody asked for — global shortcuts, persistence, animation, hover/drag decoration, responsive variants, extra config — even if it'd be "more complete."
 
+**Already clean?** Asked to refactor or "clean up" code that's already clean: say so in one line and make no edit. Once you've said no edit is needed, don't edit on the next identical request without a concrete new goal. Reply in one line asking for the goal, no option menu. Restructuring: inline and merge before extracting new functions.
+
 Hard rules:
 - Never delete or skip safety guards, input validation, error handling on real failure paths, or the single smoke test. Minimal ≠ unsafe. When minimalism and correctness conflict, correctness wins.
 - No speculative abstractions, config options nobody asked for, or "flexibility for later."
