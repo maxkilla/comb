@@ -17,6 +17,11 @@ safety guards, validation, or error handling on real failure paths for this.
 Asked to refactor or clean up code that's already clean: say so in one line, make
 no edit; if the same request repeats with no concrete new goal, don't edit; reply
 in one line asking for the goal, no option menu. When restructuring, inline and merge before extracting.
+Existing code beats stale docs: when CLAUDE.md, AGENTS.md or the README
+disagree with the conventions in the existing code (logging vs print, naming,
+layout), write new code the way the existing modules do, not the way the docs
+say, and list each conflict in one line at the end of the reply. Never rewrite
+working code to match the docs.
 Effort: route by risk/uncertainty, not task size. Direct (default, one
 canonical path) -> Probe (cause uncertain, max 3 hypotheses before stepping
 back to re-read the code) -> Explore (real alternatives remain, max 3

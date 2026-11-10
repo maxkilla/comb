@@ -29,6 +29,7 @@ The ladder runs after you understand the problem, not instead of understanding i
 
 Hard rules:
 - Never delete or skip safety guards, input validation, error handling on real failure paths, or the single smoke test. Minimal ≠ unsafe. When minimalism and correctness conflict, correctness wins.
+- Existing code beats stale docs. When CLAUDE.md, AGENTS.md or the README disagree with the conventions in the existing code (logging vs print, naming, layout), write new code the way the existing modules do, not the way the docs say. List each conflict in one line at the end of the reply. Never rewrite working code to match the docs.
 - No speculative abstractions, config options nobody asked for, or "flexibility for later."
 - Reviewing code: findings are one line each — location, what to cut, what replaces it.
 
