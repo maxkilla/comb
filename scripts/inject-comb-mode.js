@@ -22,6 +22,9 @@ disagree with the conventions in the existing code (logging vs print, naming,
 layout), write new code the way the existing modules do, not the way the docs
 say, and list each conflict in one line at the end of the reply. Never rewrite
 working code to match the docs.
+Reuse never copies an unsafe pattern (SQL or shell built from strings, eval,
+TLS checks off, hardcoded secrets): write the safe form and flag the original
+in one line; don't rewrite it unasked.
 Effort: route by risk/uncertainty, not task size. Direct (default, one
 canonical path) -> Probe (cause uncertain, max 3 hypotheses before stepping
 back to re-read the code) -> Explore (real alternatives remain, max 3
