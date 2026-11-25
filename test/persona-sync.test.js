@@ -56,3 +56,10 @@ test('existing-code-beats-stale-docs rule is in all three places', () => {
     assert.match(t, /List each conflict in one line at the end/, f);
   }
 });
+
+test('unsafe-pattern exception to reuse is in all three places', () => {
+  assert.match(injected, /Reuse never copies an unsafe pattern/);
+  for (const f of ['skills/comb/SKILL.md', 'skills/comb/SKILL.hermes.md']) {
+    assert.match(fs.readFileSync(path.join(root, f), 'utf8'), /Reuse never copies an unsafe pattern/, f);
+  }
+});
